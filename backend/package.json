@@ -1,0 +1,39 @@
+{
+  "name": "stake-mine-backend",
+  "version": "1.0.0",
+  "description": "Production-style backend for the Stake Mine game — clean architecture with Express, MySQL, and Redis.",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js",
+    "lint": "eslint src/"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "express-rate-limit": "^7.3.1",
+    "helmet": "^7.1.0",
+    "mysql2": "^3.10.0",
+    "redis": "^4.6.15",
+    "uuid": "^10.0.0",
+    "winston": "^3.13.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.4"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "keywords": [
+    "stake",
+    "mine",
+    "game",
+    "backend",
+    "express",
+    "mysql",
+    "redis"
+  ],
+  "author": "Yash",
+  "license": "MIT"
+}

@@ -1,0 +1,147 @@
+version: "3.9"
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Stake Mine — Docker Compose
+# Services: backend, mysql, phpmyadmin, redis, redis-insight
+# ──────────────────────────────────────────────────────────────────────────────
+
+services:
+
+  # ── MySQL 8 ──────────────────────────────────────────────────────────────────
+  mysql:
+    image: mysql:8.0
+    container_name: stake-mysql
+    restart: unless-stopped
+
+    environment:
+      MYSQL_ROOT_PASSWORD: root123
+      MYSQL_DATABASE: stake_mine
+      MYSQL_USER: yash
+      MYSQL_PASSWORD: yash123
+
+    ports:
+      - "3306:3306"
+
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./mysql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+
+    networks:
+      - stake-network
+
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "yash", "-pyash123"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # ── phpMyAdmin ───────────────────────────────────────────────────────────────
+  phpmyadmin:
+    image: phpmyadmin:latest
+    container_name: stake-phpmyadmin
+    restart: unless-stopped
+
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+    environment:
+      PMA_HOST: mysql
+      PMA_PORT: 3306
+      PMA_USER: yash
+      PMA_PASSWORD: yash123
+
+    ports:
+      - "8080:80"
+
+    networks:
+      - stake-network
+
+  # ── Redis 7 ──────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: stake-redis
+    restart: unless-stopped
+
+    ports:
+      - "6379:6379"
+
+    volumes:
+      - redis_data:/data
+
+    networks:
+      - stake-network
+
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── RedisInsight ─────────────────────────────────────────────────────────────
+  redis-insight:
+    image: redis/redisinsight:latest
+    container_name: stake-redis-insight
+    restart: unless-stopped
+
+    depends_on:
+      redis:
+        condition: service_healthy
+
+    ports:
+      - "5540:5540"
+
+    volumes:
+      - redis_insight_data:/data
+
+    networks:
+      - stake-network
+
+  # ── Node.js Backend ───────────────────────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+
+    container_name: stake-backend
+    restart: unless-stopped
+
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_DATABASE: stake_mine
+      MYSQL_USER: yash
+      MYSQL_PASSWORD: yash123
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_CACHE_TTL: 3600
+
+    ports:
+      - "3000:3000"
+
+    volumes:
+      - backend_logs:/app/logs
+
+    networks:
+      - stake-network
+
+# ── Named Volumes ─────────────────────────────────────────────────────────────
+volumes:
+  mysql_data:
+  redis_data:
+  redis_insight_data:
+  backend_logs:
+
+# ── Networks ──────────────────────────────────────────────────────────────────
+networks:
+  stake-network:
+    driver: bridge
