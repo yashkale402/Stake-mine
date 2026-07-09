@@ -42,6 +42,18 @@ app.use(express.urlencoded({ extended: true })); // Parse form data
 app.use(requestLogger);
 
 // ── Routes ────────────────────────────────────────────────────────────────────
+
+// Root route — confirms the API is reachable (useful for browser / uptime checks)
+app.get('/', (req, res) => {
+  res.status(200).json({
+    success: true,
+    message: 'Stake Mine API is running',
+    version: 'v1',
+    docs: '/api/v1',
+    health: '/health',
+  });
+});
+
 app.use('/health', healthRoutes);     // Health check (no versioning)
 app.use('/api/v1', apiRoutes);        // All versioned API routes
 
