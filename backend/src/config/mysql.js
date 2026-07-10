@@ -38,9 +38,13 @@ const pool = mysql.createPool({
  */
 async function testConnection() {
   const connection = await pool.getConnection();
-  await connection.ping();
-  connection.release();
-  logger.info('✅ MySQL Connected');
+  try {
+    await connection.ping();
+    logger.info('✅ MySQL Connected');
+  } finally {
+    // Always release back to the pool, even if ping() throws
+    connection.release();
+  }
 }
 
 module.exports = { pool, testConnection };

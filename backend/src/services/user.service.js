@@ -96,22 +96,54 @@ async function getUserById(id) {
  * @throws {Error} 409 if email already exists
  */
 async function createUser({ username, email, balance }) {
+  // ── Trim string inputs to catch whitespace-only values ───────────────────
+  const trimmedUsername = (username || '').trim();
+  const trimmedEmail    = (email    || '').trim().toLowerCase();
+
   // ── Validate required fields ─────────────────────────────────────────────
-  if (!username || !email) {
-    const err = new Error('username and email are required');
+  if (!trimmedUsername) {
+    const err = new Error('username is required and must not be blank');
     err.statusCode = 400;
     throw err;
   }
 
-  // ── Check for duplicate email ────────────────────────────────────────────
-  const existing = await userRepository.findByEmail(email);
+  if (!trimmedEmail) {
+    const err = new Error('email is required and must not be blank');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  // ── Basic email format check (no library needed) ─────────────────────────
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(trimmedEmail)) {
+    const err = new Error('email format is invalid');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  // ── Validate balance if provided ─────────────────────────────────────────
+  if (balance !== undefined && balance !== null) {
+    const parsedBalance = Number(balance);
+    if (Number.isNaN(parsedBalance) || parsedBalance < 0) {
+      const err = new Error('balance must be a non-negative number');
+      err.statusCode = 400;
+      throw err;
+    }
+  }
+
+  // ── Check for duplicate email → 409 Conflict ────────────────────────────
+  const existing = await userRepository.findByEmail(trimmedEmail);
   if (existing) {
-    const err = new Error(`Email '${email}' is already registered`);
+    const err = new Error(`Email '${trimmedEmail}' is already registered`);
     err.statusCode = 409;
     throw err;
   }
 
-  const newUser = await userRepository.create({ username, email, balance });
+  const newUser = await userRepository.create({
+    username: trimmedUsername,
+    email: trimmedEmail,
+    balance,
+  });
 
   // Cache the newly created user immediately
   try {

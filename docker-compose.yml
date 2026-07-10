@@ -1,5 +1,3 @@
-version: "3.9"
-
 # ──────────────────────────────────────────────────────────────────────────────
 # Stake Mine — Docker Compose
 # Services: backend, mysql, phpmyadmin, redis, redis-insight

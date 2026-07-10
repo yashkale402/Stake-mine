@@ -34,8 +34,11 @@ CREATE TABLE IF NOT EXISTS games (
 );
 
 -- ── Indexes ───────────────────────────────────────────────────────────────────
-CREATE INDEX IF NOT EXISTS idx_games_user_id ON games (user_id);
-CREATE INDEX IF NOT EXISTS idx_games_result  ON games (result);
+-- Note: MySQL 8 does not support CREATE INDEX IF NOT EXISTS.
+-- This init script only runs once (on first container start), so the tables
+-- are always freshly created above — plain CREATE INDEX is safe here.
+CREATE INDEX idx_games_user_id ON games (user_id);
+CREATE INDEX idx_games_result  ON games (result);
 
 -- ── Seed Data ─────────────────────────────────────────────────────────────────
 INSERT INTO users (username, email, balance)

@@ -1,208 +1,172 @@
-# Stake Mine — Backend
+# Stake Mine — Backend Starter
 
-> A production-style Node.js backend for the **Stake Mine** game.  
-> Built with **Express**, **MySQL 8**, **Redis 7**, and **Docker**.
+A production-style Node.js backend starter for the **Stake Mine** game application. This project provides a clean foundation using Express, MySQL 8, and Redis 7, fully containerized with Docker and Docker Compose.
 
 ---
 
-## Tech Stack
+## Prerequisites
 
-| Layer | Technology |
-|-------|-----------|
-| Runtime | Node.js 20 LTS |
-| Framework | Express.js |
-| Database | MySQL 8 |
-| Cache | Redis 7 |
-| Logger | Winston |
-| Containers | Docker + Docker Compose |
+To run this project, you need the following installed:
+- [Docker](https://www.docker.com/products/docker-desktop)
+- [Docker Compose](https://docs.docker.com/compose/install/)
+- [Node.js (LTS)](https://nodejs.org/) (optional, only for local development outside Docker)
 
 ---
 
 ## Project Structure
+
+This project follows a clean architecture separating HTTP routing, controller orchestration, business services, and database queries (Repository pattern).
 
 ```
 stake-mine/
 │
 ├── backend/
 │   ├── src/
-│   │   ├── config/          # DB & env configuration
-│   │   ├── controllers/     # HTTP layer — parse request, send response
-│   │   ├── services/        # Business logic layer
-│   │   ├── repositories/    # Data access layer (raw SQL)
-│   │   ├── routes/          # Route definitions
-│   │   ├── middleware/      # Error handler, rate limiter, logger, 404
-│   │   ├── models/          # Schema typedefs (no ORM)
-│   │   ├── utils/           # Shared helpers
+│   │   ├── config/          # Configurations for Env, MySQL, and Redis clients
+│   │   ├── controllers/     # HTTP Layer: Parses request data, calls services, sends HTTP response
+│   │   ├── services/        # Business Logic Layer: Validates rules, coordinates db & caching logic
+│   │   ├── repositories/    # Data Access Layer: Performs raw SQL database queries
+│   │   ├── routes/          # Express route registration (grouped by resource)
+│   │   ├── middleware/      # Logger, global error handler, 404, and rate limiters
+│   │   ├── models/          # JSDoc type specifications (data shapes)
+│   │   ├── utils/           # Shared helper functions
 │   │   ├── logger/          # Winston logger setup
-│   │   ├── app.js           # Express app factory
-│   │   └── server.js        # Entry point — starts HTTP server
+│   │   ├── app.js           # Express app factory (registers middlewares & routes)
+│   │   └── server.js        # Server entry point (verifies connections, starts HTTP listener)
 │   │
 │   ├── Dockerfile
+│   ├── .dockerignore
 │   ├── .env.example
 │   ├── .gitignore
 │   └── package.json
 │
 ├── mysql/
-│   └── init.sql             # DB schema + seed data
+│   └── init.sql             # MySQL schema definition & seed data
 │
-├── docker-compose.yml
+├── docker-compose.yml       # Docker Compose infrastructure setup
 └── README.md
 ```
 
 ---
 
-## Quick Start (Docker)
+## Architectural Flow & Caching
 
-```bash
-# 1. Clone the repo
-git clone <repo-url>
-cd stake-mine
+The project implements a clean layered design:
+`Client Request → Express Router → Controller → Service → Repository → Database`
 
-# 2. Copy environment file
-cp backend/.env.example backend/.env
+### Redis Cache Read-Through Flow
 
-# 3. Start all services
-docker compose up --build
+When reading a user profile by ID (`GET /api/v1/users/:id`), the user service applies a read-through caching strategy using Redis:
 
-# 4. Stop all services
-docker compose down
-
-# 5. Stop and remove volumes (clean slate)
-docker compose down -v
+```
+                  ┌──────────────────────┐
+                  │   Client Request     │
+                  └──────────┬───────────┘
+                             │
+                             ▼
+                  ┌──────────────────────┐
+                  │ Check Redis Cache    │
+                  └──────────┬───────────┘
+                             │
+              ┌──────────────┴──────────────┐
+              ▼                             ▼
+        [ Cache HIT ]                 [ Cache MISS ]
+              │                             │
+    Retrieve from Redis            Query MySQL Database
+              │                             │
+              │                             ▼
+              │                     Save in Redis Cache
+              │                             │
+              └──────────────┬──────────────┘
+                             │
+                             ▼
+                  ┌──────────────────────┐
+                  │    Return Response   │
+                  └──────────────────────┘
 ```
 
-### Service URLs
-
-| Service | URL |
-|---------|-----|
-| Backend API | http://localhost:3000 |
-| Health Check | http://localhost:3000/health |
-| phpMyAdmin | http://localhost:8080 |
-| RedisInsight | http://localhost:5540 |
+- **Redis Cache Key:** `user:<user_id>`
+- **Cache Expiration (TTL):** Configurable via `REDIS_CACHE_TTL` (default 3600 seconds / 1 hour).
+- **Cache Invalidation:** The cache is automatically populated on both creation (`POST /api/v1/users`) and on first-fetch miss.
 
 ---
 
-## Local Development (without Docker)
+## Database Schema (MySQL)
+
+MySQL is the primary database. The database is initialized automatically with the following structure:
+- **`users` Table:** Stores player details (`id`, `username`, `email`, `balance` defaulting to 1000.00, timestamps).
+- **`games` Table:** Stores game session history (`id`, `user_id` foreign key, `bet_amount`, `mines`, `result` of 'won'/'lost'/'active', `payout`, timestamps).
+- **Seed Data:** Initializes a test user `Yash` (balance 5000.00) and `Demo` (balance 1000.00).
+
+---
+
+## Docker Compose Services
+
+Docker Compose manages and networks 5 distinct services:
+
+1. **`backend`**: Node.js Alpine image running the Express application.
+2. **`mysql`**: MySQL 8 database service containing user balances and game records.
+3. **`redis`**: Redis 7 cache service running on Alpine.
+4. **`phpmyadmin`**: A web-based graphical user interface for managing the MySQL database, accessible on port `8080`.
+5. **`redis-insight`**: A developer-focused graphical user interface for monitoring and querying the Redis server, accessible on port `5540`.
+
+---
+
+## Quick Start (Docker)
+
+To run the entire system in a production-style containerized environment:
 
 ```bash
-cd backend
-npm install
-cp .env.example .env
-# Edit .env and point MYSQL_HOST/REDIS_HOST to localhost
-npm run dev
+# 1. Copy the template env file
+cp backend/.env.example backend/.env
+
+# 2. Build and start all services
+docker compose up --build
+
+# 3. Stop the services
+docker compose down
+
+# 4. Stop and delete database volumes (factory reset)
+docker compose down -v
 ```
+
+### Port Mappings
+
+Once running, you can access the services on these ports:
+- **Backend API:** `http://localhost:3000`
+- **phpMyAdmin (MySQL GUI):** `http://localhost:8080` (Log in with DB User `yash` / Password `yash123`)
+- **RedisInsight (Redis GUI):** `http://localhost:5540`
 
 ---
 
 ## API Endpoints
 
-### Health
+### 1. Base & Health Check
+- **`GET /`**  
+  Returns API welcome status.
+- **`GET /health`**  
+  Checks connection health of MySQL and Redis services. Returns `503` if any service is down.
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/health` | MySQL + Redis status |
+### 2. Users
+- **`GET /api/v1/users`**  
+  Lists all users.
+- **`GET /api/v1/users/:id`**  
+  Fetches a single user. Checks Redis cache first.
+- **`POST /api/v1/users`**  
+  Creates a new user. Performs validation (blank checks, email regex format validation, balance validation) and returns `409` on duplicate email constraint.
+  - Body example:
+    ```json
+    {
+      "username": "Alice",
+      "email": "alice@example.com",
+      "balance": 2500
+    }
+    ```
 
-**Response:**
-```json
-{
-  "success": true,
-  "mysql": "connected",
-  "redis": "connected",
-  "uptime": "42s",
-  "timestamp": "2026-07-08T13:00:00.000Z"
-}
-```
+### 3. Game (Stub Endpoints)
+Endpoints reserved for the upcoming game engine:
+- **`POST /api/v1/game/start`**
+- **`POST /api/v1/game/reveal`**
+- **`POST /api/v1/game/cashout`**
 
----
-
-### Users — `/api/v1/users`
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/v1/users` | List all users |
-| GET | `/api/v1/users/:id` | Get user by ID (Redis cached) |
-| POST | `/api/v1/users` | Create a new user |
-
-**POST body:**
-```json
-{
-  "username": "Alice",
-  "email": "alice@example.com",
-  "balance": 2000
-}
-```
-
----
-
-### Game — `/api/v1/game` *(placeholder — 501 Not Implemented)*
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/api/v1/game/start` | Start a new game |
-| POST | `/api/v1/game/reveal` | Reveal a tile |
-| POST | `/api/v1/game/cashout` | Cash out winnings |
-
-> ⚠️ Game endpoints return `501 Not Implemented`.  
-> The game algorithm will be added in a future iteration.
-
----
-
-## Redis Caching
-
-The `GET /api/v1/users/:id` endpoint demonstrates a **read-through cache** pattern:
-
-```
-Request → Check Redis
-              │
-        ┌─────┴──────┐
-      HIT            MISS
-        │              │
-   Return cache    Query MySQL
-                      │
-                  Store in Redis
-                      │
-                  Return data
-```
-
-- Cache key format: `user:<id>`
-- TTL: **3600 seconds** (1 hour) — configurable via `REDIS_CACHE_TTL`
-- Cache is **written** on create and on first-fetch miss
-- Redis failures degrade gracefully — the app keeps working via MySQL
-
----
-
-## MySQL
-
-- Uses `mysql2/promise` with a **connection pool** (10 connections max)
-- Schema defined in `mysql/init.sql` — auto-runs on first Docker startup
-- Two tables: `users`, `games`
-- No ORM — raw SQL queries in the repository layer for clarity
-
----
-
-## Logging
-
-Winston is configured with three outputs:
-
-| Output | Level | File |
-|--------|-------|------|
-| Console | all | — |
-| File | error | `logs/error.log` |
-| File | all | `logs/combined.log` |
-
----
-
-## Environment Variables
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `PORT` | `3000` | HTTP server port |
-| `NODE_ENV` | `development` | Environment |
-| `MYSQL_HOST` | `mysql` | MySQL hostname |
-| `MYSQL_PORT` | `3306` | MySQL port |
-| `MYSQL_DATABASE` | `stake_mine` | Database name |
-| `MYSQL_USER` | — | MySQL username |
-| `MYSQL_PASSWORD` | — | MySQL password |
-| `REDIS_HOST` | `redis` | Redis hostname |
-| `REDIS_PORT` | `6379` | Redis port |
-| `REDIS_CACHE_TTL` | `3600` | Cache TTL in seconds |
+> **Note:** Game routes return `501 Not Implemented` with TODO comments indicating where the mine-generation and cash-out algorithms will reside.

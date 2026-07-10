@@ -9,7 +9,7 @@ WORKDIR /app
 # Copy package files first (Docker layer caching — only re-installs if changed)
 COPY package.json package-lock.json* ./
 
-RUN npm ci --only=production
+RUN npm ci --omit=dev
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Stage 2 — Final image
