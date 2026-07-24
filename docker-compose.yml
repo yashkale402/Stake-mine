@@ -112,8 +112,9 @@ services:
         condition: service_healthy
 
     environment:
+      PORT: 3001
       NODE_ENV: production
-      PORT: 3000
+      ALLOWED_ORIGIN: "*"
       MYSQL_HOST: mysql
       MYSQL_PORT: 3306
       MYSQL_DATABASE: stake_mine
@@ -122,9 +123,11 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_CACHE_TTL: 3600
+      JWT_SECRET: docker-dev-jwt-secret-change-me-in-production-32chars
+      JWT_EXPIRES_IN: 7d
 
     ports:
-      - "3000:3000"
+      - "3001:3001"
 
     volumes:
       - backend_logs:/app/logs

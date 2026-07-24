@@ -29,6 +29,9 @@ const errorHandler = (err, req, res, next) => {
   res.status(statusCode).json({
     success: false,
     message,
+    // Surface structured extras (e.g. activeGame on 409) so clients can recover
+    ...(err.activeGame && { activeGame: err.activeGame }),
+    ...(err.finalState && { finalState: err.finalState }),
     // Only expose stack trace in development
     ...(process.env.NODE_ENV === 'development' && { stack: err.stack }),
   });

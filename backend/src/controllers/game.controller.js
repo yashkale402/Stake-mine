@@ -1,84 +1,136 @@
 /**
  * game.controller.js
  * ──────────────────────────────────────────────────────────────────────────────
- * PLACEHOLDER — HTTP layer for game endpoints.
- *
- * ⚠️  No game logic is implemented here.
- *      These handlers are stubs that return a clear message indicating
- *      that the game algorithm is pending.
- *
- * TODO (implement when game algorithm is ready):
- *   - POST /api/v1/game/start   → call gameService.startGame()
- *   - POST /api/v1/game/reveal  → call gameService.revealTile()
- *   - POST /api/v1/game/cashout → call gameService.cashOut()
+ * HTTP layer for game endpoints (start, reveal, cashout, state, history).
  * ──────────────────────────────────────────────────────────────────────────────
  */
 
 'use strict';
 
-// const gameService = require('../services/game.service'); // TODO: uncomment when ready
+const gameService = require('../services/game.service');
+const { success } = require('../utils/response.helper');
 
 /**
- * TODO: POST /api/v1/game/start
- * Starts a new game session for a user.
- *
- * Expected body: { userId, betAmount, minesCount }
+ * POST /api/v1/game/start
+ * Expected body: { betAmountPaise, mineCount }
  */
 async function startGame(req, res, next) {
   try {
-    // TODO: const { userId, betAmount, minesCount } = req.body;
-    // TODO: const game = await gameService.startGame(userId, betAmount, minesCount);
-    // TODO: res.status(201).json({ success: true, data: game });
+    const userId = req.user.id;
+    const { betAmountPaise, mineCount } = req.body;
 
-    res.status(501).json({
-      success: false,
-      message: 'Game algorithm not yet implemented. Coming soon!',
-    });
+    const game = await gameService.startGame(userId, Number(betAmountPaise), Number(mineCount));
+    res.status(201).json(success(game, 'Game started successfully'));
   } catch (err) {
     next(err);
   }
 }
 
 /**
- * TODO: POST /api/v1/game/reveal
- * Reveals a tile in the active game.
- *
- * Expected body: { gameId, tileIndex }
+ * POST /api/v1/game/reveal
+ * Expected body: { gameUuid, cellIndex }
  */
 async function revealTile(req, res, next) {
   try {
-    // TODO: const { gameId, tileIndex } = req.body;
-    // TODO: const result = await gameService.revealTile(gameId, tileIndex);
-    // TODO: res.status(200).json({ success: true, data: result });
+    const userId = req.user.id;
+    const { gameUuid, cellIndex } = req.body;
 
-    res.status(501).json({
-      success: false,
-      message: 'Tile reveal not yet implemented. Coming soon!',
-    });
+    if (!gameUuid) {
+      const err = new Error('gameUuid is required');
+      err.statusCode = 400;
+      throw err;
+    }
+
+    const result = await gameService.revealCell(userId, gameUuid, Number(cellIndex));
+    res.status(200).json(success(result));
   } catch (err) {
     next(err);
   }
 }
 
 /**
- * TODO: POST /api/v1/game/cashout
- * Cashes out the current winnings.
- *
- * Expected body: { gameId }
+ * POST /api/v1/game/cashout
+ * Expected body: { gameUuid }
  */
 async function cashOut(req, res, next) {
   try {
-    // TODO: const { gameId } = req.body;
-    // TODO: const result = await gameService.cashOut(gameId);
-    // TODO: res.status(200).json({ success: true, data: result });
+    const userId = req.user.id;
+    const { gameUuid } = req.body;
 
-    res.status(501).json({
-      success: false,
-      message: 'Cash-out not yet implemented. Coming soon!',
-    });
+    if (!gameUuid) {
+      const err = new Error('gameUuid is required');
+      err.statusCode = 400;
+      throw err;
+    }
+
+    const result = await gameService.cashout(userId, gameUuid);
+    res.status(200).json(success(result));
   } catch (err) {
     next(err);
   }
 }
 
-module.exports = { startGame, revealTile, cashOut };
+/**
+ * GET /api/v1/game/active
+ * Returns the player's current ACTIVE game, or null.
+ */
+async function getActiveGame(req, res, next) {
+  try {
+    const userId = req.user.id;
+    const game = await gameService.getActiveGame(userId);
+    res.status(200).json(success(game));
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * GET /api/v1/game/state/:gameUuid
+ */
+async function getGameState(req, res, next) {
+  try {
+    const userId = req.user.id;
+    const { gameUuid } = req.params;
+
+    const state = await gameService.getGameState(userId, gameUuid);
+    res.status(200).json(success(state));
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * GET /api/v1/game/history
+ * Query params: ?page=1&limit=20
+ */
+async function getHistory(req, res, next) {
+  try {
+    const userId = req.user.id;
+    const page = parseInt(req.query.page, 10) || 1;
+    const limit = parseInt(req.query.limit, 10) || 20;
+
+    const history = await gameService.getGameHistory(userId, page, limit);
+    res.status(200).json(success(history));
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function getFairness(req, res, next) {
+  try {
+    const result = await gameService.getFairnessInfo(req.user.id);
+    res.status(200).json(success(result));
+  } catch (err) {
+    next(err);
+  }
+}
+
+module.exports = {
+  startGame,
+  revealTile,
+  cashOut,
+  getActiveGame,
+  getGameState,
+  getHistory,
+  getFairness,
+};

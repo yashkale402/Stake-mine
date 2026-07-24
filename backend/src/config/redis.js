@@ -37,7 +37,8 @@ const redisClient = createClient({
 
 // ── Event listeners ───────────────────────────────────────────────────────────
 redisClient.on('error', (err) => {
-  logger.error(`[Redis] Client error: ${err.message}`);
+  const detail = err && (err.message || err.code || String(err));
+  logger.error(`[Redis] Client error: ${detail}`);
 });
 
 redisClient.on('reconnecting', () => {

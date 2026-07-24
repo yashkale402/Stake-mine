@@ -1,30 +1,45 @@
-/**
- * rateLimiter.js
- * ──────────────────────────────────────────────────────────────────────────────
- * Express Rate Limit middleware.
- *
- * Protects the API from brute-force attacks and excessive traffic by limiting
- * how many requests a single IP can make within a time window.
- *
- * Configured values:
- *   - 100 requests per 15-minute window per IP (adjust for production)
- * ──────────────────────────────────────────────────────────────────────────────
- */
-
 'use strict';
 
 const rateLimit = require('express-rate-limit');
 
-const rateLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15-minute window
-  max: 100,                  // Max requests per window per IP
-  standardHeaders: true,     // Return rate-limit info in RateLimit-* headers
-  legacyHeaders: false,      // Disable deprecated X-RateLimit-* headers
+function buildRateLimitKey(req) {
+  const forwardedFor = req.headers['x-forwarded-for'];
 
-  message: {
+  if (typeof forwardedFor === 'string' && forwardedFor.trim()) {
+    return forwardedFor.split(',')[0].trim();
+  }
+
+  return req.ip || req.socket?.remoteAddress || 'unknown-client';
+}
+
+function buildRateLimitResponse(req) {
+  const resetTime = req.rateLimit?.resetTime instanceof Date ? req.rateLimit.resetTime : null;
+  const retryAfterSeconds = resetTime
+    ? Math.max(1, Math.ceil((resetTime.getTime() - Date.now()) / 1000))
+    : 15 * 60;
+
+  return {
     success: false,
-    message: 'Too many requests from this IP. Please try again after 15 minutes.',
+    message: 'Too many requests from this IP. Please try again later.',
+    retryAfterSeconds,
+    retryAt: resetTime ? resetTime.toISOString() : null,
+  };
+}
+
+const authRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: Number(process.env.AUTH_RATE_LIMIT_MAX || 20),
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: () => process.env.NODE_ENV !== 'production',
+  keyGenerator: buildRateLimitKey,
+  handler: (req, res) => {
+    res.status(429).json(buildRateLimitResponse(req));
   },
 });
 
-module.exports = rateLimiter;
+module.exports = {
+  authRateLimiter,
+  buildRateLimitKey,
+  buildRateLimitResponse,
+};

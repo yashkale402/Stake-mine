@@ -1,49 +1,36 @@
-/**
- * app.js
- * ──────────────────────────────────────────────────────────────────────────────
- * Express application factory.
- *
- * This file configures the Express app — middleware, routes, and error handlers.
- * It does NOT start the HTTP server; that's server.js's job.
- * Keeping them separate makes unit-testing easier (import app without binding a port).
- * ──────────────────────────────────────────────────────────────────────────────
- */
-
 'use strict';
 
-const express      = require('express');
-const helmet       = require('helmet');
-const cors         = require('cors');
-const rateLimiter  = require('./middleware/rateLimiter');
+const path = require('path');
+const express = require('express');
+const helmet = require('helmet');
+const cors = require('cors');
 const requestLogger = require('./middleware/requestLogger');
 const errorHandler = require('./middleware/errorHandler');
-const notFound     = require('./middleware/notFound');
+const notFound = require('./middleware/notFound');
 const healthRoutes = require('./routes/health.routes');
-const apiRoutes    = require('./routes/index');
+const apiRoutes = require('./routes/index');
 
 const app = express();
 
-// ── Security middleware ───────────────────────────────────────────────────────
-app.use(helmet());   // Sets secure HTTP response headers
+app.set('trust proxy', process.env.TRUST_PROXY || 1);
 
-app.use(cors({
-  origin: process.env.ALLOWED_ORIGIN || '*',  // Restrict in production
-  methods: ['GET', 'POST', 'PUT', 'DELETE'],
-}));
+app.use(helmet());
 
-// ── Rate limiting ─────────────────────────────────────────────────────────────
-app.use(rateLimiter);
+app.use(
+  cors({
+    origin: process.env.ALLOWED_ORIGIN || '*',
+    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  })
+);
 
-// ── Body parsing ──────────────────────────────────────────────────────────────
-app.use(express.json());          // Parse application/json
-app.use(express.urlencoded({ extended: true })); // Parse form data
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
-// ── Request logging ───────────────────────────────────────────────────────────
+app.use(express.static(path.join(__dirname, '../public')));
+app.get('/favicon.ico', (req, res) => res.status(204).end());
+
 app.use(requestLogger);
 
-// ── Routes ────────────────────────────────────────────────────────────────────
-
-// Root route — confirms the API is reachable (useful for browser / uptime checks)
 app.get('/', (req, res) => {
   res.status(200).json({
     success: true,
@@ -54,13 +41,10 @@ app.get('/', (req, res) => {
   });
 });
 
-app.use('/health', healthRoutes);     // Health check (no versioning)
-app.use('/api/v1', apiRoutes);        // All versioned API routes
+app.use('/health', healthRoutes);
+app.use('/api/v1', apiRoutes);
 
-// ── 404 handler (must be after all routes) ────────────────────────────────────
 app.use(notFound);
-
-// ── Global error handler (must be last, 4-param signature) ───────────────────
 app.use(errorHandler);
 
 module.exports = app;

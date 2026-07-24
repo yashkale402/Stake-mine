@@ -33,10 +33,16 @@ RUN mkdir -p logs && chown -R appuser:appgroup /app
 # Switch to non-root user
 USER appuser
 
-EXPOSE 3000
+EXPOSE 3001
 
 # Healthcheck — Docker will mark the container unhealthy if this fails
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
-  CMD wget -qO- http://localhost:3000/health || exit 1
+  CMD wget -qO- http://localhost:3001/health || exit 1
 
 CMD ["node", "src/server.js"]
+
+
+
+
+
+

@@ -24,6 +24,7 @@ const REQUIRED_VARS = [
   'MYSQL_PASSWORD',
   'REDIS_HOST',
   'REDIS_PORT',
+  'JWT_SECRET',
 ];
 
 const missing = REQUIRED_VARS.filter((key) => !process.env[key]);
@@ -38,20 +39,23 @@ if (missing.length > 0) {
 // ── Exported config object ────────────────────────────────────────────────────
 module.exports = {
   // Server
-  PORT: parseInt(process.env.PORT, 10) || 3000,
-  NODE_ENV: process.env.NODE_ENV || 'development',
+  PORT:           parseInt(process.env.PORT, 10) || 3001,
+  NODE_ENV:       process.env.NODE_ENV || 'development',
+  ALLOWED_ORIGIN: process.env.ALLOWED_ORIGIN || '*',
 
   // MySQL
-  MYSQL_HOST: process.env.MYSQL_HOST,
-  MYSQL_PORT: parseInt(process.env.MYSQL_PORT, 10) || 3306,
+  MYSQL_HOST:     process.env.MYSQL_HOST,
+  MYSQL_PORT:     parseInt(process.env.MYSQL_PORT, 10) || 3306,
   MYSQL_DATABASE: process.env.MYSQL_DATABASE,
-  MYSQL_USER: process.env.MYSQL_USER,
+  MYSQL_USER:     process.env.MYSQL_USER,
   MYSQL_PASSWORD: process.env.MYSQL_PASSWORD,
 
   // Redis
-  REDIS_HOST: process.env.REDIS_HOST,
-  REDIS_PORT: parseInt(process.env.REDIS_PORT, 10) || 6379,
-
-  // Cache
+  REDIS_HOST:      process.env.REDIS_HOST,
+  REDIS_PORT:      parseInt(process.env.REDIS_PORT, 10) || 6379,
   REDIS_CACHE_TTL: parseInt(process.env.REDIS_CACHE_TTL, 10) || 3600,
+
+  // JWT
+  JWT_SECRET:     process.env.JWT_SECRET,
+  JWT_EXPIRES_IN: process.env.JWT_EXPIRES_IN || '7d',
 };

@@ -1,14 +1,7 @@
 /**
  * game.routes.js
  * ──────────────────────────────────────────────────────────────────────────────
- * PLACEHOLDER — Route definitions for /api/v1/game
- *
- * ⚠️  All endpoints return 501 (Not Implemented) until the game algorithm is ready.
- *
- * TODO (implement when game algorithm is ready):
- *   - POST /api/v1/game/start   → start a new game
- *   - POST /api/v1/game/reveal  → reveal a tile
- *   - POST /api/v1/game/cashout → cash out current winnings
+ * Route definitions for /api/v1/game
  * ──────────────────────────────────────────────────────────────────────────────
  */
 
@@ -16,16 +9,19 @@
 
 const { Router } = require('express');
 const gameController = require('../controllers/game.controller');
+const { authenticate } = require('../middleware/auth.middleware');
 
 const router = Router();
 
-// POST /api/v1/game/start
+// All game routes require authentication
+router.use(authenticate);
+
 router.post('/start', gameController.startGame);
-
-// POST /api/v1/game/reveal
 router.post('/reveal', gameController.revealTile);
-
-// POST /api/v1/game/cashout
 router.post('/cashout', gameController.cashOut);
+router.get('/active', gameController.getActiveGame);
+router.get('/fairness', gameController.getFairness);
+router.get('/state/:gameUuid', gameController.getGameState);
+router.get('/history', gameController.getHistory);
 
 module.exports = router;

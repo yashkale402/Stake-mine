@@ -22,6 +22,7 @@ const logger = require('./logger/logger');
 const app    = require('./app');
 
 const { testConnection: testMySQL } = require('./config/mysql');
+const { runStartupMigrations }      = require('./config/migrate');
 const redisClient                   = require('./config/redis');
 
 async function bootstrap() {
@@ -34,13 +35,17 @@ async function bootstrap() {
     // ── 2. Test MySQL connection ─────────────────────────────────────────────
     await testMySQL();
 
-    // ── 3. Start HTTP server ─────────────────────────────────────────────────
+    // ── 3. Lightweight schema migrations (role column, admin seed) ───────────
+    await runStartupMigrations();
+
+    // ── 4. Start HTTP server ─────────────────────────────────────────────────
     app.listen(env.PORT, () => {
       logger.info(`✅ Server running on http://localhost:${env.PORT}`);
       logger.info(`📡 Environment: ${env.NODE_ENV}`);
       logger.info(`🏥 Health check: http://localhost:${env.PORT}/health`);
     });
   } catch (err) {
+    logger.error(err);
     logger.error(`❌ Failed to start server: ${err.message}`);
     process.exit(1); // Exit with failure code so Docker restarts the container
   }
@@ -49,13 +54,17 @@ async function bootstrap() {
 // ── Graceful shutdown ─────────────────────────────────────────────────────────
 process.on('SIGTERM', async () => {
   logger.info('SIGTERM received — shutting down gracefully…');
-  await redisClient.quit();
+  if (redisClient.isOpen) {
+    await redisClient.quit();
+  }
   process.exit(0);
 });
 
 process.on('SIGINT', async () => {
   logger.info('SIGINT received — shutting down gracefully…');
-  await redisClient.quit();
+  if (redisClient.isOpen) {
+    await redisClient.quit();
+  }
   process.exit(0);
 });
 
