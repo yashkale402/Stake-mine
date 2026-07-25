@@ -57,7 +57,10 @@ export default function GameControls() {
       });
 
       setActiveGame(res.data);
-      updateBalance(user.balance_paise - betAmountPaise);
+      // Fetch real balance from server instead of estimating
+      api.get('/auth/me').then((meRes: any) => {
+        if (meRes?.data?.balance_paise !== undefined) updateBalance(meRes.data.balance_paise);
+      }).catch(() => {});
     } catch (err: any) {
       if (err.activeGame?.game_uuid) {
         const g = err.activeGame;

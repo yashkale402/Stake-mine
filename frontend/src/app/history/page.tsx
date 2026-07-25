@@ -27,6 +27,9 @@ export default function HistoryPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const LIMIT = 20;
 
   useEffect(() => {
     setMounted(true);
@@ -38,12 +41,13 @@ export default function HistoryPage() {
     }
   }, [mounted, isHydrated, isAuthenticated, router]);
 
-  const fetchHistory = async () => {
+  const fetchHistory = async (p = page) => {
     setLoading(true);
     setError(null);
     try {
-      const res: any = await api.get('/game/history?limit=30');
+      const res: any = await api.get(`/game/history?limit=${LIMIT}&page=${p}`);
       setHistory(res.data?.games || []);
+      setTotalPages(res.data?.pagination?.totalPages || 1);
     } catch (err: any) {
       setError(err.message || 'Failed to fetch history');
     } finally {
@@ -53,9 +57,9 @@ export default function HistoryPage() {
 
   useEffect(() => {
     if (mounted && isHydrated && isAuthenticated) {
-      fetchHistory();
+      fetchHistory(page);
     }
-  }, [mounted, isHydrated, isAuthenticated]);
+  }, [mounted, isHydrated, isAuthenticated, page]);
 
   if (!mounted || !isHydrated) {
     return (
@@ -79,7 +83,7 @@ export default function HistoryPage() {
         </div>
         <button
           type="button"
-          onClick={fetchHistory}
+          onClick={() => fetchHistory(page)}
           className="flex items-center gap-1.5 rounded-xl border border-white/5 bg-stake-card px-3 py-2 text-sm text-stake-text transition hover:text-white"
         >
           <RefreshCw className="h-4 w-4" /> Refresh
@@ -158,6 +162,29 @@ export default function HistoryPage() {
               </tbody>
             </table>
           </div>
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between border-t border-white/5 px-4 py-3">
+              <span className="text-xs text-stake-text">Page {page} of {totalPages}</span>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  disabled={page <= 1}
+                  onClick={() => setPage(page - 1)}
+                  className="rounded-lg border border-white/5 bg-stake-dark px-3 py-1.5 text-xs font-semibold text-stake-text transition hover:text-white disabled:opacity-40"
+                >
+                  Prev
+                </button>
+                <button
+                  type="button"
+                  disabled={page >= totalPages}
+                  onClick={() => setPage(page + 1)}
+                  className="rounded-lg border border-white/5 bg-stake-dark px-3 py-1.5 text-xs font-semibold text-stake-text transition hover:text-white disabled:opacity-40"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

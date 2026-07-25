@@ -10,6 +10,18 @@ interface Args {
   isLoading: boolean;
 }
 
+// Global mute state persisted in localStorage
+export function isMuted(): boolean {
+  if (typeof window === 'undefined') return false;
+  return localStorage.getItem('audio_muted') === 'true';
+}
+
+export function setMuted(value: boolean) {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem('audio_muted', String(value));
+  window.dispatchEvent(new Event('audio_mute_change'));
+}
+
 export function useGameAudio({ activeGame, isLoading }: Args) {
   const lastStatusRef = useRef<string | undefined>(activeGame?.status);
   const lastRevealCountRef = useRef<number>(activeGame?.revealed_cells?.length || 0);
@@ -51,6 +63,8 @@ function playTone(
   type: OscillatorType,
   gainValue: number
 ) {
+  if (isMuted()) return;
+
   const AudioCtx = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
   if (!AudioCtx) return;
 

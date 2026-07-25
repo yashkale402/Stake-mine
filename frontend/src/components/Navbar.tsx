@@ -5,8 +5,9 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/useAuthStore';
 import api from '@/lib/api';
-import { Bomb, Wallet, LogOut, History, Settings, X } from 'lucide-react';
+import { Bomb, Wallet, LogOut, History, Settings, X, Volume2, VolumeX } from 'lucide-react';
 import { useGameStore } from '@/store/useGameStore';
+import { isMuted, setMuted } from '@/lib/useGameAudio';
 
 export default function Navbar() {
   const router = useRouter();
@@ -16,6 +17,16 @@ export default function Navbar() {
   const [depositAmount, setDepositAmount] = useState('');
   const [showDepositModal, setShowDepositModal] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [muted, setMutedState] = useState(false);
+
+  useEffect(() => {
+    setMutedState(isMuted());
+    const handler = () => setMutedState(isMuted());
+    window.addEventListener('audio_mute_change', handler);
+    return () => window.removeEventListener('audio_mute_change', handler);
+  }, []);
+
+  const toggleMute = () => setMuted(!muted);
 
   useEffect(() => {
     setMounted(true);
@@ -118,7 +129,15 @@ export default function Navbar() {
 
               <nav className="flex items-center gap-1">
                 {!isAdmin && navLink('/history', 'History', History)}
-                {navLink('/admin', 'Admin', Settings)}
+                {isAdmin && navLink('/admin', 'Admin', Settings)}
+                <button
+                  type="button"
+                  onClick={toggleMute}
+                  className="rounded-lg p-2 text-stake-text transition hover:bg-stake-cardHover hover:text-white"
+                  title={muted ? 'Unmute' : 'Mute'}
+                >
+                  {muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+                </button>
                 <button
                   type="button"
                   onClick={() => {

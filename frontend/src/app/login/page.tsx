@@ -12,8 +12,8 @@ export default function LoginPage() {
   const [isRegister, setIsRegister] = useState(false);
   const [loginMode, setLoginMode] = useState<'PLAYER' | 'ADMIN'>('PLAYER');
   const [username, setUsername] = useState('');
-  const [email, setEmail] = useState('yash@example.com');
-  const [password, setPassword] = useState('password123');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -31,13 +31,13 @@ export default function LoginPage() {
     if (loginMode === 'ADMIN') {
       setIsRegister(false);
       setEmail('admin@stake.mine');
-      setPassword('password123');
+      setPassword('');
       return;
     }
 
     if (!isRegister) {
-      setEmail('yash@example.com');
-      setPassword('password123');
+      setEmail('');
+      setPassword('');
     }
   }, [isRegister, loginMode]);
 
@@ -114,14 +114,9 @@ export default function LoginPage() {
           <div className="mb-5 rounded-2xl border border-stake-gold/20 bg-stake-gold/10 p-3 text-sm text-stake-bright">
             <div className="mb-1 flex items-center gap-2 font-semibold text-stake-gold">
               <Shield className="h-4 w-4" />
-              Admin demo access
+              Admin access
             </div>
-            <p className="text-stake-text">
-              ID: <span className="font-semibold text-white">admin@stake.mine</span>
-            </p>
-            <p className="text-stake-text">
-              Password: <span className="font-semibold text-white">password123</span>
-            </p>
+            <p className="text-stake-text">Enter your admin credentials below.</p>
           </div>
         )}
 
