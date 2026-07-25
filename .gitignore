@@ -25,6 +25,7 @@ logs/
 dist/
 build/
 coverage/
+frontend/.next/
 
 # ──────────────────────────────────────────────
 # OS

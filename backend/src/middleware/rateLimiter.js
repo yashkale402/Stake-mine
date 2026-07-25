@@ -28,10 +28,10 @@ function buildRateLimitResponse(req) {
 
 const authRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: Number(process.env.AUTH_RATE_LIMIT_MAX || 20),
+  max: 0, // 0 = unlimited
   standardHeaders: true,
   legacyHeaders: false,
-  skip: () => process.env.NODE_ENV !== 'production',
+  skip: () => true, // rate limiting disabled
   keyGenerator: buildRateLimitKey,
   handler: (req, res) => {
     res.status(429).json(buildRateLimitResponse(req));

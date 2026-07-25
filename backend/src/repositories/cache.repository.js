@@ -113,7 +113,7 @@ async function setActiveGamePointer(userId, gameUuid, ttlSeconds = TTL.ACTIVE_GA
     const result = await redisClient.set(
       KEYS.activeGame(userId),
       gameUuid,
-      { EX: ttlSeconds, NX: true }
+      { EX: ttlSeconds }
     );
     return result === 'OK';
   } catch (err) {
