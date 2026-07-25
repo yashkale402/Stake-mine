@@ -26,12 +26,17 @@ const SALT_ROUNDS = 10;
  */
 async function register({ username, email, password }) {
   // ── Input validation ─────────────────────────────────────────────────────
-  const trimUsername = (username || '').trim();
+  const trimUsername = (username || '').trim().replace(/[<>"'&]/g, '');
   const trimEmail    = (email    || '').trim().toLowerCase();
   const trimPassword = (password || '').trim();
 
-  if (!trimUsername) {
-    const err = new Error('username is required');
+  if (!trimUsername || trimUsername.length < 2 || trimUsername.length > 30) {
+    const err = new Error('Username must be 2–30 characters');
+    err.statusCode = 400;
+    throw err;
+  }
+  if (!/^[a-zA-Z0-9_\- ]+$/.test(trimUsername)) {
+    const err = new Error('Username can only contain letters, numbers, spaces, hyphens and underscores');
     err.statusCode = 400;
     throw err;
   }
@@ -46,10 +51,16 @@ async function register({ username, email, password }) {
     throw err;
   }
 
-  // ── Duplicate check ──────────────────────────────────────────────────────
+  // ── Duplicate check (email + username) ───────────────────────────────────
   const existing = await userRepository.findByEmail(trimEmail);
   if (existing) {
     const err = new Error('An account with this email already exists');
+    err.statusCode = 409;
+    throw err;
+  }
+  const existingUsername = await userRepository.findByUsername(trimUsername);
+  if (existingUsername) {
+    const err = new Error('This username is already taken');
     err.statusCode = 409;
     throw err;
   }

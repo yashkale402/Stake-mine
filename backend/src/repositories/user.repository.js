@@ -55,6 +55,14 @@ async function findByEmail(email) {
   return rows[0] || null;
 }
 
+async function findByUsername(username) {
+  const [rows] = await pool.query(
+    `SELECT id FROM users WHERE username = ? LIMIT 1`,
+    [username]
+  );
+  return rows[0] || null;
+}
+
 /**
  * Create a new user.
  * @param {{ username: string, email: string, password_hash: string, balance_paise?: number }} data
@@ -155,6 +163,7 @@ module.exports = {
   findAll,
   findById,
   findByEmail,
+  findByUsername,
   create,
   adjustBalance,
   getBalance,

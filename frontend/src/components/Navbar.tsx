@@ -183,7 +183,7 @@ export default function Navbar() {
               <input
                 type="number"
                 min="10"
-                max="100000"
+                max="1000000"
                 value={depositAmount}
                 onChange={(e) => setDepositAmount(e.target.value)}
                 placeholder="e.g. 500"

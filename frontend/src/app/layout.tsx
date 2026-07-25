@@ -3,6 +3,7 @@ import React from 'react';
 import { Syne, Manrope } from 'next/font/google';
 import Providers from './providers';
 import Navbar from '@/components/Navbar';
+import ErrorBoundary from '@/components/ErrorBoundary';
 
 const display = Syne({
   subsets: ['latin'],
@@ -29,7 +30,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <Providers>
           <Navbar />
           <main className="flex-1 w-full max-w-7xl mx-auto px-4 py-5 md:px-6 md:py-7">
-            {children}
+            <ErrorBoundary>
+              {children}
+            </ErrorBoundary>
           </main>
         </Providers>
       </body>
