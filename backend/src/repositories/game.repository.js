@@ -277,6 +277,22 @@ async function getRecentHistory(userId, limit = 20) {
   return rows;
 }
 
+async function getConsecutiveLosses(userId) {
+  const [rows] = await pool.query(
+    `SELECT outcome FROM game_history
+     WHERE user_id = ?
+     ORDER BY played_at DESC
+     LIMIT 10`,
+    [userId]
+  );
+  let count = 0;
+  for (const row of rows) {
+    if (row.outcome === 'LOSS') count++;
+    else break;
+  }
+  return count;
+}
+
 /**
  * Count total history records for a player (for pagination).
  *
@@ -456,6 +472,7 @@ module.exports = {
   insertHistory,
   getHistory,
   getRecentHistory,
+  getConsecutiveLosses,
   countHistory,
   getAdminGameMetrics,
   getPlayerSummaryStats,

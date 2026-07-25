@@ -28,6 +28,7 @@ const crypto             = require('crypto');
 const { v4: uuidv4 }    = require('uuid');
 
 const configService      = require('./config.service');
+const { computeRiskProfile } = require('./risk-engine');
 const gameRepository     = require('../repositories/game.repository');
 const userRepository     = require('../repositories/user.repository');
 const configRepository   = require('../repositories/config.repository');
@@ -287,15 +288,39 @@ async function startGame(userId, betAmountPaise, mineCount) {
   // ── 6. Load slot budget (informational — does not block game start) ──────
   const { slot, ledger: budgetState } = await _loadSlotAndBudget();
 
-  // ── 7. Generate mine positions (CSPRNG) ──────────────────────────────────
-  // This is the ONLY place mines are generated. They never change after this.
-  const minePositions = generateMinePositions(boardSize, mineCount);
+  // ── 7. Compute risk profile + generate mine positions (CSPRNG) ───────────
+  // Risk engine adjusts mines/houseEdge based on budget pressure & player lifecycle
+  const playerStats = await gameRepository.getPlayerSummaryStats(userId);
+  const sessionLosses = await gameRepository.getConsecutiveLosses(userId);
+
+  const riskProfile = computeRiskProfile({
+    requestedMines:       mineCount,
+    boardSize,
+    baseHouseEdge:        houseEdge,
+    totalBudgetPaise:     budgetState?.totalBudgetPaise || 1,
+    spentPaise:           budgetState?.spentPaise || 0,
+    playerTotalGames:     Number(playerStats?.total_games || 0),
+    playerNetProfitPaise: Number(playerStats?.net_profit_paise || 0),
+    playerSessionLosses:  sessionLosses,
+    betAmountPaise,
+  });
+
+  const effectiveMines    = riskProfile.mines;
+  const effectiveHouseEdge = riskProfile.houseEdge;
+
+  logger.info(
+    `[Risk] user=${userId} mode=${riskProfile.mode} ` +
+    `mines=${mineCount}→${effectiveMines} edge=${houseEdge}→${effectiveHouseEdge} ` +
+    `budget=${budgetState?.spentPaise || 0}/${budgetState?.totalBudgetPaise || 0}`
+  );
+
+  const minePositions = generateMinePositions(boardSize, effectiveMines);
 
   // ── 8. Prepare game data ─────────────────────────────────────────────────
   const gameUuid     = uuidv4();
   const now          = new Date();
   const expiresAt    = new Date(now.getTime() + gameExpirySeconds * 1000);
-  const configSnapshot = { boardSize, minMines, maxMines, houseEdge, gameExpirySeconds };
+  const configSnapshot = { boardSize, minMines, maxMines, houseEdge: effectiveHouseEdge, gameExpirySeconds, riskMode: riskProfile.mode };
 
   // ── 9. MySQL Transaction: debit wallet + insert game ────────────────────
   const connection = await pool.getConnection();
@@ -304,17 +329,15 @@ async function startGame(userId, betAmountPaise, mineCount) {
   try {
     await connection.beginTransaction();
 
-    // Debit the bet from the player's wallet (atomic — fails if balance < bet)
     await userRepository.adjustBalance(userId, -betAmountPaise, connection);
 
-    // Insert the game session record
     gameRecord = await gameRepository.createGame(
       {
         game_uuid:        gameUuid,
         user_id:          userId,
         slot_ledger_id:   budgetState?.ledgerId || null,
         bet_amount_paise: betAmountPaise,
-        mine_count:       mineCount,
+        mine_count:       effectiveMines,
         board_size:       boardSize,
         mine_positions:   minePositions,
         config_snapshot:  configSnapshot,
@@ -331,18 +354,17 @@ async function startGame(userId, betAmountPaise, mineCount) {
     connection.release();
   }
 
-  // ── 10. Build in-memory game state for Redis ─────────────────────────────
   const gameState = {
     game_uuid:          gameUuid,
     user_id:            userId,
     status:             'ACTIVE',
     bet_amount_paise:   betAmountPaise,
-    mine_count:         mineCount,
+    mine_count:         effectiveMines,
     board_size:         boardSize,
-    mine_positions:     minePositions,   // Stored in Redis — NEVER sent to client
+    mine_positions:     minePositions,
     revealed_cells:     [],
     current_multiplier: 1.0,
-    house_edge:         houseEdge,
+    house_edge:         effectiveHouseEdge,
     slot_id:            slot?.id || null,
     ledger_id:          budgetState?.ledgerId || null,
     started_at:         now.toISOString(),
@@ -363,7 +385,7 @@ async function startGame(userId, betAmountPaise, mineCount) {
     game_uuid:          gameUuid,
     board_size:         boardSize,
     total_cells:        boardSize,
-    mine_count:         mineCount,
+    mine_count:         effectiveMines,
     bet_amount_paise:   betAmountPaise,
     bet_formatted:      `₹${(betAmountPaise / 100).toFixed(2)}`,
     current_multiplier: '1.0000',
