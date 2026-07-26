@@ -221,6 +221,30 @@ async function getLatestAuditLogForActorAction(actor, action) {
   return rows[0] || null;
 }
 
+/**
+ * Get budget utilisation for all active slots for today.
+ * Joins slot_configs with today's ledger row (if any).
+ * @returns {Promise<Array>}
+ */
+async function getSlotBudgetStatus() {
+  const [rows] = await pool.query(
+    `SELECT
+       sc.id          AS slot_id,
+       sc.slot_name,
+       sc.budget_paise AS configured_budget_paise,
+       COALESCE(sbl.total_budget_paise, sc.budget_paise) AS total_budget_paise,
+       COALESCE(sbl.spent_paise, 0)                      AS spent_paise,
+       COALESCE(sbl.game_count, 0)                       AS game_count,
+       COALESCE(sbl.slot_date, CURDATE())                AS slot_date
+     FROM slot_configs sc
+     LEFT JOIN slot_budget_ledger sbl
+       ON sbl.slot_id = sc.id AND sbl.slot_date = CURDATE()
+     WHERE sc.is_active = TRUE
+     ORDER BY sc.start_hour ASC`
+  );
+  return rows;
+}
+
 async function updateSlot(id, fields, updatedBy) {
   const { budget_paise, slot_name, start_hour, end_hour, is_active } = fields;
   await pool.query(
@@ -249,4 +273,5 @@ module.exports = {
   getRecentAuditLogs,
   getLatestAuditLogForActorAction,
   updateSlot,
+  getSlotBudgetStatus,
 };
