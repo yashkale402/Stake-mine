@@ -195,43 +195,43 @@ export default function GameBoard() {
       </div>
 
       {/* Board */}
-      <div
-        ref={boardRef}
-        className={`board-stage relative mx-auto max-w-[520px] rounded-[28px] border border-white/[0.05] p-3 sm:p-4 ${shaking ? 'animate-board-shake' : ''}`}
-      >
-        {/* Particle layer */}
-        {bursts.map((b) =>
-          b.type === 'mine'
-            ? <ParticleBurst key={b.id} x={b.x} y={b.y} />
-            : <GemSparkle key={b.id} x={b.x} y={b.y} />
-        )}
-
-        <motion.div
-          className="mx-auto grid aspect-square w-full max-w-[460px] grid-cols-5 gap-2 sm:gap-2.5"
-          initial="hidden"
-          animate="visible"
-          variants={{ hidden: {}, visible: { transition: { staggerChildren: 0.022 } } }}
+      {activeGame ? (
+        <div
+          ref={boardRef}
+          className={`board-stage relative mx-auto max-w-[520px] rounded-[28px] border border-white/[0.05] p-3 sm:p-4 ${shaking ? 'animate-board-shake' : ''}`}
         >
-          {Array.from({ length: boardSize }).map((_, index) => {
-            const isRevealed = revealed.includes(index);
-            const isMine = !!activeGame?.mine_positions?.includes(index);
-            return (
-              <Tile
-                key={index}
-                index={index}
-                isRevealed={isRevealed}
-                isMine={isMine}
-                isGameActive={isGameActive}
-                isGameOver={isGameOver}
-                isLoading={isLoading}
-                onClick={() => handleTileClick(index)}
-              />
-            );
-          })}
-        </motion.div>
-      </div>
+          {/* Particle layer */}
+          {bursts.map((b) =>
+            b.type === 'mine'
+              ? <ParticleBurst key={b.id} x={b.x} y={b.y} />
+              : <GemSparkle key={b.id} x={b.x} y={b.y} />
+          )}
 
-      {!activeGame && (
+          <motion.div
+            className="mx-auto grid aspect-square w-full max-w-[460px] grid-cols-5 gap-2 sm:gap-2.5"
+            initial="hidden"
+            animate="visible"
+            variants={{ hidden: {}, visible: { transition: { staggerChildren: 0.022 } } }}
+          >
+            {Array.from({ length: boardSize }).map((_, index) => {
+              const isRevealed = revealed.includes(index);
+              const isMine = !!activeGame?.mine_positions?.includes(index);
+              return (
+                <Tile
+                  key={index}
+                  index={index}
+                  isRevealed={isRevealed}
+                  isMine={isMine}
+                  isGameActive={isGameActive}
+                  isGameOver={isGameOver}
+                  isLoading={isLoading}
+                  onClick={() => handleTileClick(index)}
+                />
+              );
+            })}
+          </motion.div>
+        </div>
+      ) : (
         <div className="mt-4">
           {/* Skeleton board */}
           <div className="board-stage mx-auto max-w-[520px] rounded-[28px] border border-white/[0.05] p-3 sm:p-4">
