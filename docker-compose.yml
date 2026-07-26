@@ -28,11 +28,11 @@ services:
       - stake-network
 
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "yash", "-pyash123"]
+      test: ["CMD", "mysql", "-h", "localhost", "-u", "yash", "-pyash123", "-e", "SELECT 1 FROM stake_mine.users LIMIT 1;"]
       interval: 10s
       timeout: 5s
-      retries: 5
-      start_period: 30s
+      retries: 10
+      start_period: 60s
 
   # ── phpMyAdmin ───────────────────────────────────────────────────────────────
   phpmyadmin:
@@ -151,6 +151,8 @@ services:
 
     environment:
       NEXT_PUBLIC_API_URL: http://localhost:3001
+      # Used by Next.js server-side rewrites inside the container
+      INTERNAL_API_URL: http://stake-backend:3001
 
     ports:
       - "3000:3000"

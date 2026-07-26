@@ -33,17 +33,25 @@ const pool = mysql.createPool({
 
 /**
  * testConnection
- * Grabs one connection from the pool, runs a ping, then releases it.
- * Called once at server startup to confirm MySQL is reachable.
+ * Retries up to `maxRetries` times with a fixed delay.
+ * Ensures MySQL is fully ready before the server starts.
  */
-async function testConnection() {
-  const connection = await pool.getConnection();
-  try {
-    await connection.ping();
-    logger.info('✅ MySQL Connected');
-  } finally {
-    // Always release back to the pool, even if ping() throws
-    connection.release();
+async function testConnection(maxRetries = 10, delayMs = 3000) {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const connection = await pool.getConnection();
+      try {
+        await connection.ping();
+        logger.info('✅ MySQL Connected');
+        return;
+      } finally {
+        connection.release();
+      }
+    } catch (err) {
+      logger.warn(`[MySQL] Attempt ${attempt}/${maxRetries} failed: ${err.message}`);
+      if (attempt === maxRetries) throw err;
+      await new Promise((res) => setTimeout(res, delayMs));
+    }
   }
 }
 
