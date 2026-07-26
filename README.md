@@ -1,579 +1,350 @@
-# Stake Mine
+<div align="center">
 
-Stake Mine is a full-stack single-player mines game platform with:
+# 💣 Stake Mine
 
-- a Node.js + Express backend
-- a Next.js 14 frontend
-- MySQL as the source of truth
-- Redis for active game state, config caching, and locks
-- an admin panel for runtime control and analytics
+**A production-ready, full-stack real-time mines casino game**
 
-The project keeps the game engine deterministic within each round:
+[![Next.js](https://img.shields.io/badge/Next.js-14-black?logo=next.js)](https://nextjs.org)
+[![Node.js](https://img.shields.io/badge/Node.js-Express-green?logo=node.js)](https://nodejs.org)
+[![MySQL](https://img.shields.io/badge/MySQL-8-blue?logo=mysql)](https://mysql.com)
+[![Redis](https://img.shields.io/badge/Redis-7-red?logo=redis)](https://redis.io)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5-blue?logo=typescript)](https://typescriptlang.org)
+[![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker)](https://docker.com)
 
-- mine positions are generated once at round start
-- the board does not change during play
-- reveals only check the locked board state
-- cashout uses layered protection to prevent double settlement
+Pick gems. Dodge mines. Cash out before it's too late.
 
----
-
-## Overview
-
-Stake Mine is built around a clean layered architecture:
-
-- Controllers handle HTTP requests and responses
-- Services contain game and business logic
-- Repositories isolate MySQL and Redis access
-- The frontend consumes versioned APIs and manages UI state with Zustand
-
-The current application includes:
-
-- player login and registration
-- gameplay start, reveal, cashout, restore, and history
-- player progression, daily rewards, missions, badges, and leaderboard
-- fairness explanation and trust surfaces
-- admin config editing, slot analytics, KPI snapshots, player visibility, and config history
+</div>
 
 ---
 
-## Tech Stack
+## ✨ Features
+
+| Area | What's included |
+|---|---|
+| 🎮 **Gameplay** | Bet, reveal tiles, live multiplier, cashout, session restore |
+| 🔐 **Auth** | JWT login/register, role-based routing (Player / Admin) |
+| 📈 **Progression** | XP levels, titles, missions, badges, daily rewards, leaderboard |
+| 🛡️ **Fairness** | Immutable board, cryptographic mine generation, fairness API |
+| 🧑‍💼 **Admin** | Runtime config, KPI dashboard, slot analytics, player visibility, audit history |
+| 🎨 **UI** | Framer Motion animations, 3D tile flips, particle bursts, sparkline, mobile-first |
+| 🔊 **Audio** | Lightweight generated sound feedback with mute toggle |
+
+---
+
+## 🖥️ Tech Stack
 
 ### Backend
-
-- Node.js
-- Express
-- MySQL 8
-- Redis 7
-- JWT authentication
-- Winston logging
+- **Node.js** + **Express** — REST API
+- **MySQL 8** — source of truth (wallets, sessions, history)
+- **Redis 7** — active game state, distributed locks, config cache
+- **JWT** — stateless authentication
+- **Winston** — structured logging
 
 ### Frontend
+- **Next.js 14** App Router + **TypeScript**
+- **Tailwind CSS** + **Framer Motion**
+- **Zustand** — client state (with localStorage persistence for preferences)
+- **React Hot Toast** — in-game notifications
 
-- Next.js 14 App Router
-- React
-- TypeScript
-- Tailwind CSS
-- Zustand
-- React Query
-
-### Dev / Infra
-
-- Docker Compose
-- phpMyAdmin
-- RedisInsight
-- Node test runner
+### Infra
+- **Docker Compose** — one-command local stack
+- **phpMyAdmin** — DB browser
+- **RedisInsight** — Redis browser
 
 ---
 
-## Core Product Areas
-
-### Player Side
-
-- Login and registration
-- Bet and mine selection
-- Reveal flow with live multiplier updates
-- Cashout flow
-- Unfinished game restore
-- Game history
-- Tutorial and risk explanation
-- Daily rewards
-- Missions and badges
-- Progression system
-- Leaderboard
-- Fairness explanation
-
-### Admin Side
-
-- Runtime config updates
-- Slot budget visibility
-- KPI dashboard
-- Recent players
-- Config audit history
-- Experiment placeholders for A/B testing
-
----
-
-## High-Level Architecture
+## 🏗️ Architecture
 
 ```mermaid
 flowchart LR
-    A["Player / Admin Browser"] --> B["Next.js Frontend"]
-    B --> C["Express API /api/v1"]
-    C --> D["Service Layer"]
-    D --> E["MySQL"]
-    D --> F["Redis"]
+    Browser["🌐 Browser"] --> FE["Next.js Frontend :3000"]
+    FE --> API["Express API :3001 /api/v1"]
+    API --> SVC["Service Layer"]
+    SVC --> MySQL["MySQL 8"]
+    SVC --> Redis["Redis 7"]
 ```
 
-### Backend Layering
+### Backend Layers
 
-```mermaid
-flowchart TD
-    A["Routes"] --> B["Controllers"]
-    B --> C["Services"]
-    C --> D["Repositories"]
-    D --> E["MySQL"]
-    D --> F["Redis"]
+```
+Routes → Controllers → Services → Repositories → MySQL / Redis
 ```
 
-This keeps responsibilities clear:
-
-- routes define endpoints
-- controllers validate request intent and shape responses
-- services enforce business rules
-- repositories perform persistence operations
+- **Routes** — define endpoints and apply middleware
+- **Controllers** — validate input, shape responses
+- **Services** — enforce business rules and game logic
+- **Repositories** — all persistence operations (MySQL + Redis)
 
 ---
 
-## Project Structure
+## 📁 Project Structure
 
-```text
+```
 Stake-mine/
 ├── backend/
-│   ├── src/
-│   │   ├── config/           # env, mysql, redis, migrations
-│   │   ├── controllers/      # auth, game, user, admin, health
-│   │   ├── middleware/       # auth, rate limit, error handling, request logging
-│   │   ├── repositories/     # MySQL and Redis access
-│   │   ├── routes/           # versioned API route modules
-│   │   ├── services/         # game logic and business logic
-│   │   ├── utils/            # response helpers
-│   │   ├── logger/           # winston logger
-│   │   ├── app.js            # express app factory
-│   │   └── server.js         # bootstrap
-│   ├── test/                 # backend tests
-│   ├── package.json
-│   └── Dockerfile
+│   └── src/
+│       ├── config/         # env, mysql, redis, migrations
+│       ├── controllers/    # auth, game, user, admin, health
+│       ├── middleware/     # auth, rate-limit, error, request logging
+│       ├── repositories/   # MySQL + Redis access
+│       ├── routes/         # versioned API modules
+│       ├── services/       # game engine + business logic
+│       ├── utils/          # response helpers
+│       ├── app.js
+│       └── server.js
 ├── frontend/
-│   ├── src/
-│   │   ├── app/              # Next.js routes
-│   │   ├── components/       # UI building blocks
-│   │   ├── lib/              # api client and helpers
-│   │   └── store/            # zustand stores
-│   ├── package.json
-│   └── tailwind.config.js
+│   └── src/
+│       ├── app/            # Next.js pages (/, /login, /history, /admin)
+│       ├── components/     # GameBoard, GameControls, Navbar, panels
+│       ├── lib/            # axios client, audio, expiry hook
+│       └── store/          # Zustand stores (auth, game)
 ├── mysql/
-│   └── init.sql              # schema and seed data
+│   └── init.sql            # schema + seed data
 ├── docker-compose.yml
 └── README.md
 ```
 
 ---
 
-## Game Engine Rules
+## 🎮 Game Engine Guarantees
 
-These are the most important gameplay guarantees in the project:
+> These rules make the game provably fair within each round.
 
-1. Mine positions are generated exactly once at game start.
-2. Generation uses cryptographically secure randomness.
-3. Mine positions are stored in Redis and persisted in MySQL.
-4. Reveals do not move or recalculate mines.
-5. Cashout is protected by:
-- Redis distributed lock
-- MySQL conditional settlement
-6. Redis is not the source of truth.
-7. MySQL remains the persistent record for recovery and history.
+1. Mine positions are generated **once** at round start using cryptographically secure randomness
+2. The board is **immutable** — reveals never recalculate or move mines
+3. Mine positions are stored in both **Redis** (speed) and **MySQL** (durability)
+4. Cashout is protected by a **Redis distributed lock** + **MySQL conditional settlement** (rows-affected check) to prevent double payouts
+5. MySQL is always the **source of truth** — Redis is rebuilt from DB on recovery
 
 ---
 
-## Main Gameplay Flow
+## 🔄 Core Flows
+
+<details>
+<summary><strong>Gameplay Flow</strong></summary>
 
 ```mermaid
 flowchart TD
-    A["Player starts round"] --> B["Backend validates user and bet"]
-    B --> C["Service loads effective config"]
-    C --> D["Service generates immutable mine positions"]
-    D --> E["MySQL transaction: debit wallet + create game session"]
-    E --> F["Redis stores active game state"]
-    F --> G["Frontend renders active board"]
+    A["Player starts round"] --> B["Validate user + bet"]
+    B --> C["Load effective config"]
+    C --> D["Generate immutable mine positions"]
+    D --> E["MySQL: debit wallet + create session"]
+    E --> F["Redis: store active game state"]
+    F --> G["Frontend renders board"]
     G --> H["Player reveals tile"]
-    H --> I["Backend checks chosen cell against locked mine_positions"]
-    I --> J{"Mine hit?"}
-    J -- "Yes" --> K["Mark LOST, reveal mines, write history"]
-    J -- "No" --> L["Update multiplier and revealed cells"]
-    L --> M{"Cashout?"}
-    M -- "Yes" --> N["Lock + settle payout + write history"]
-    M -- "No" --> H
+    H --> I["Check cell vs locked mine_positions"]
+    I --> J{Mine hit?}
+    J -- Yes --> K["LOST → reveal mines → write history"]
+    J -- No --> L["Update multiplier + revealed cells"]
+    L --> M{Cashout?}
+    M -- Yes --> N["Lock → settle payout → write history"]
+    M -- No --> H
 ```
 
----
+</details>
 
-## Cashout Protection Flow
+<details>
+<summary><strong>Cashout Protection Flow</strong></summary>
 
 ```mermaid
 flowchart TD
-    A["Cashout request"] --> B["Load active state"]
-    B --> C["Acquire Redis lock"]
-    C --> D{"Lock acquired?"}
-    D -- "No" --> E["Reject concurrent cashout"]
-    D -- "Yes" --> F["Re-read game state"]
-    F --> G["Compute payout"]
-    G --> H["MySQL transaction: credit wallet + settle game if ACTIVE"]
-    H --> I{"Rows affected = 1?"}
-    I -- "No" --> J["Rollback / reject duplicate settlement"]
-    I -- "Yes" --> K["Insert history and update budget ledger"]
-    K --> L["Clear Redis game state"]
-    L --> M["Release lock"]
+    A["Cashout request"] --> B["Acquire Redis lock"]
+    B --> C{Lock acquired?}
+    C -- No --> D["Reject concurrent cashout"]
+    C -- Yes --> E["Re-read game state"]
+    E --> F["Compute payout"]
+    F --> G["MySQL: credit wallet + settle if ACTIVE"]
+    G --> H{rows affected = 1?}
+    H -- No --> I["Rollback — duplicate settlement blocked"]
+    H -- Yes --> J["Insert history + update budget ledger"]
+    J --> K["Clear Redis state + release lock"]
 ```
 
----
+</details>
 
-## Restore / Recovery Flow
+<details>
+<summary><strong>Session Restore Flow</strong></summary>
 
 ```mermaid
 flowchart TD
-    A["Frontend loads dashboard"] --> B["Request active game"]
-    B --> C{"Redis active pointer exists?"}
-    C -- "Yes" --> D["Load state from Redis"]
-    C -- "No" --> E["Fallback to MySQL ACTIVE session lookup"]
-    E --> F{"Found active DB game?"}
-    F -- "No" --> G["No restore"]
-    F -- "Yes" --> H["Rebuild Redis state from DB row"]
-    D --> I["Return sanitized active game"]
+    A["Dashboard loads"] --> B["GET /game/active"]
+    B --> C{Redis pointer exists?}
+    C -- Yes --> D["Load from Redis"]
+    C -- No --> E["Fallback: MySQL ACTIVE session lookup"]
+    E --> F{Found?}
+    F -- No --> G["No restore — fresh state"]
+    F -- Yes --> H["Rebuild Redis from DB row"]
+    D --> I["Return sanitized active game to frontend"]
     H --> I
 ```
 
----
-
-## Player Experience Systems
-
-The current project now includes a first progression layer without changing the game algorithm:
-
-- tutorial steps
-- risk explanation
-- first-win guidance
-- progression titles and level thresholds
-- daily reward claim flow
-- computed missions
-- badge collection
-- limited-time event messaging
-- leaderboard
-
-These systems are currently lightweight and intentionally fit the existing architecture rather than introducing a separate event engine.
+</details>
 
 ---
 
-## Fairness Model
+## 🚀 Quick Start
 
-The project does not implement a separate provably-fair cryptographic proof page yet, but it does expose a fairness explanation through the API and UI.
-
-Current fairness messaging explains:
-
-- the board is generated once before play
-- the board is immutable during the round
-- reveals only compare against stored mine positions
-- multipliers come from reveal probability adjusted by house edge
-
-This keeps outcomes consistent with the actual engine implementation.
-
----
-
-## Admin Analytics Model
-
-The admin dashboard currently surfaces:
-
-- total users and active users
-- active games and lifetime sessions
-- wager volume
-- payout totals
-- net house result
-- payout ratio
-- retention-style metrics
-- churn-risk style metrics
-- recent players
-- config history
-- experiment placeholders
-
-These KPIs are derived from current tables and designed to stay compatible with the present schema.
-
----
-
-## Current API Surface
-
-### Auth
-
-- `POST /api/v1/auth/register`
-- `POST /api/v1/auth/login`
-- `GET /api/v1/auth/me`
-
-### User
-
-- `GET /api/v1/users/profile`
-- `POST /api/v1/users/deposit`
-- `GET /api/v1/users/engagement`
-- `POST /api/v1/users/daily-reward/claim`
-- `GET /api/v1/users/leaderboard`
-
-### Game
-
-- `POST /api/v1/game/start`
-- `POST /api/v1/game/reveal`
-- `POST /api/v1/game/cashout`
-- `GET /api/v1/game/active`
-- `GET /api/v1/game/state/:gameUuid`
-- `GET /api/v1/game/history`
-- `GET /api/v1/game/fairness`
-
-### Admin
-
-- `GET /api/v1/admin/summary`
-- `GET /api/v1/admin/players`
-- `GET /api/v1/admin/config`
-- `PUT /api/v1/admin/config`
-- `GET /api/v1/admin/config-history`
-- `GET /api/v1/admin/slots`
-
-### Health
-
-- `GET /health`
-
----
-
-## Setup
-
-## Option 1: Docker Compose
-
-From the project root:
+### Option 1 — Docker Compose (recommended)
 
 ```bash
+git clone https://github.com/yashkale402/Stake-mine.git
+cd Stake-mine
 docker-compose up --build -d
 ```
 
-Services:
+| Service | URL |
+|---|---|
+| Backend API | http://localhost:3001 |
+| Frontend | http://localhost:3000 |
+| phpMyAdmin | http://localhost:8080 |
+| RedisInsight | http://localhost:5540 |
 
-- Backend API: `http://localhost:3001`
-- MySQL: `localhost:3306`
-- Redis: `localhost:6379`
-- phpMyAdmin: `http://localhost:8080`
-- RedisInsight: `http://localhost:5540`
-
-Note:
-- The current compose file runs backend infrastructure.
-- The frontend is typically run locally with `npm run dev` inside `frontend`.
-
-## Option 2: Local Development
-
-### Backend
+### Option 2 — Local Dev
 
 ```bash
-cd backend
-npm install
-npm run dev
+# Terminal 1 — Backend
+cd backend && npm install && npm run dev
+
+# Terminal 2 — Frontend
+cd frontend && npm install && npm run dev
 ```
 
-### Frontend
+---
 
-```bash
-cd frontend
-npm install
-npm run dev
+## ⚙️ Environment Variables
+
+Create `backend/.env` from `backend/.env.example`:
+
+```env
+PORT=3001
+MYSQL_HOST=localhost
+MYSQL_PORT=3306
+MYSQL_DATABASE=stake_mine
+MYSQL_USER=root
+MYSQL_PASSWORD=yourpassword
+REDIS_HOST=localhost
+REDIS_PORT=6379
+JWT_SECRET=your_jwt_secret
 ```
 
-Frontend local URL:
+---
 
-- `http://localhost:3000`
+## 🔑 Dev Accounts
 
-Backend local URL:
-
-- `http://localhost:3001`
+| Role | Email | Password |
+|---|---|---|
+| Player | `yash@example.com` | `password123` |
+| Player | `demo@example.com` | `password123` |
+| Admin | `admin@stake.mine` | `password123` |
 
 ---
 
-## Environment Expectations
+## 📡 API Reference
 
-Backend expects:
+### Auth
+| Method | Endpoint | Description |
+|---|---|---|
+| POST | `/api/v1/auth/register` | Register new player |
+| POST | `/api/v1/auth/login` | Login, returns JWT |
+| GET | `/api/v1/auth/me` | Get current user |
 
-- `PORT`
-- `MYSQL_HOST`
-- `MYSQL_PORT`
-- `MYSQL_DATABASE`
-- `MYSQL_USER`
-- `MYSQL_PASSWORD`
-- `REDIS_HOST`
-- `REDIS_PORT`
-- `JWT_SECRET`
+### Game
+| Method | Endpoint | Description |
+|---|---|---|
+| POST | `/api/v1/game/start` | Start a new round |
+| POST | `/api/v1/game/reveal` | Reveal a tile |
+| POST | `/api/v1/game/cashout` | Cash out current round |
+| GET | `/api/v1/game/active` | Get active session |
+| GET | `/api/v1/game/history` | Game history |
+| GET | `/api/v1/game/fairness` | Fairness explanation |
 
-See:
+### User
+| Method | Endpoint | Description |
+|---|---|---|
+| POST | `/api/v1/users/deposit` | Add balance |
+| GET | `/api/v1/users/engagement` | Progression + missions + badges |
+| POST | `/api/v1/users/daily-reward/claim` | Claim daily reward |
+| GET | `/api/v1/users/leaderboard` | Top players |
 
-- [backend/src/config/env.js](C:\Users\yashk\OneDrive\Desktop\Stake-mine\backend\src\config\env.js)
+### Admin
+| Method | Endpoint | Description |
+|---|---|---|
+| GET | `/api/v1/admin/summary` | KPI dashboard |
+| GET/PUT | `/api/v1/admin/config` | Runtime config |
+| GET | `/api/v1/admin/config-history` | Config audit log |
+| GET | `/api/v1/admin/players` | Recent players |
+| GET | `/api/v1/admin/slots` | Slot analytics |
 
 ---
 
-## Seeded Development Accounts
-
-Seed data is defined in:
-
-- [mysql/init.sql](C:\Users\yashk\OneDrive\Desktop\Stake-mine\mysql\init.sql)
-- [backend/src/config/migrate.js](C:\Users\yashk\OneDrive\Desktop\Stake-mine\backend\src\config\migrate.js)
-
-Current development logins:
-
-- Player: `yash@example.com` / `password123`
-- Player: `demo@example.com` / `password123`
-- Admin: `admin@stake.mine` / `password123`
-
----
-
-## Example API Usage
-
-### Login
+## 💡 Example Requests
 
 ```http
+# Login
 POST /api/v1/auth/login
-Content-Type: application/json
+{ "email": "yash@example.com", "password": "password123" }
 
-{
-  "email": "yash@example.com",
-  "password": "password123"
-}
-```
-
-### Start Game
-
-```http
+# Start game
 POST /api/v1/game/start
 Authorization: Bearer <TOKEN>
-Content-Type: application/json
+{ "betAmountPaise": 1000, "mineCount": 3 }
 
-{
-  "betAmountPaise": 1000,
-  "mineCount": 3
-}
-```
-
-### Reveal Tile
-
-```http
+# Reveal tile
 POST /api/v1/game/reveal
 Authorization: Bearer <TOKEN>
-Content-Type: application/json
+{ "gameUuid": "<UUID>", "cellIndex": 4 }
 
-{
-  "gameUuid": "<GAME_UUID>",
-  "cellIndex": 4
-}
-```
-
-### Cashout
-
-```http
+# Cashout
 POST /api/v1/game/cashout
 Authorization: Bearer <TOKEN>
-Content-Type: application/json
-
-{
-  "gameUuid": "<GAME_UUID>"
-}
-```
-
-### Claim Daily Reward
-
-```http
-POST /api/v1/users/daily-reward/claim
-Authorization: Bearer <TOKEN>
-Content-Type: application/json
+{ "gameUuid": "<UUID>" }
 ```
 
 ---
 
-## Testing
-
-Backend tests currently use the Node test runner:
+## 🧪 Tests
 
 ```bash
-cd backend
-npm test
+cd backend && npm test
 ```
 
-Current test coverage includes:
-
-- mine generation correctness
-- multiplier growth behavior
-- streak calculation
-- daily reward availability logic
-- player engagement profile generation
-
-Test file:
-
-- [backend/test/game.logic.test.js](C:\Users\yashk\OneDrive\Desktop\Stake-mine\backend\test\game.logic.test.js)
+Covers: mine generation, multiplier growth, streak logic, daily reward availability, engagement profile generation.
 
 ---
 
-## Frontend Experience Notes
+## 🗄️ Data Model
 
-The frontend currently emphasizes:
-
-- animated board reveals
-- game restore on reload
-- role-based admin/player routing
-- engagement widgets
-- fairness panel
-- leaderboard
-- lightweight generated sound feedback
-- mobile-aware panel layouts
-
-Main frontend files:
-
-- [frontend/src/app/page.tsx](C:\Users\yashk\OneDrive\Desktop\Stake-mine\frontend\src\app\page.tsx)
-- [frontend/src/components/GameBoard.tsx](C:\Users\yashk\OneDrive\Desktop\Stake-mine\frontend\src\components\GameBoard.tsx)
-- [frontend/src/components/GameControls.tsx](C:\Users\yashk\OneDrive\Desktop\Stake-mine\frontend\src\components\GameControls.tsx)
-- [frontend/src/components/PlayerExperiencePanel.tsx](C:\Users\yashk\OneDrive\Desktop\Stake-mine\frontend\src\components\PlayerExperiencePanel.tsx)
-- [frontend/src/components/TrustPanel.tsx](C:\Users\yashk\OneDrive\Desktop\Stake-mine\frontend\src\components\TrustPanel.tsx)
+| Table | Purpose |
+|---|---|
+| `users` | Accounts + wallet balance |
+| `game_sessions` | Active and completed rounds |
+| `game_history` | Settled round records |
+| `global_config` | Runtime game parameters |
+| `slot_configs` | Per-slot configuration |
+| `slot_budget_ledger` | House P&L tracking |
+| `audit_logs` | Admin action history |
+| `player_config_overrides` | Per-player config overrides |
 
 ---
 
-## Data Model Summary
+## 🗺️ Roadmap
 
-Primary tables:
-
-- `users`
-- `global_config`
-- `slot_configs`
-- `slot_budget_ledger`
-- `game_sessions`
-- `game_history`
-- `audit_logs`
-- `player_config_overrides`
-
-These are initialized in:
-
-- [mysql/init.sql](C:\Users\yashk\OneDrive\Desktop\Stake-mine\mysql\init.sql)
+- [ ] Provably-fair cryptographic proof page
+- [ ] WebSocket live multiplier push (replace polling)
+- [ ] Integration test suite (API-level)
+- [ ] Social / referral system
+- [ ] Persistent mission completion state
+- [ ] Push / in-app notifications
+- [ ] Stronger admin player-management actions
 
 ---
 
-## Operational Notes
+## 📄 License
 
-- Redis is used for speed, locks, and short-lived active state.
-- MySQL remains the durable source of truth.
-- Startup runs lightweight migrations for compatibility with older local DB volumes.
-- Admin config updates invalidate effective config cache.
-- Health checks exist for service visibility.
+MIT — built for learning and demonstration purposes.
 
 ---
 
-## Known Next Steps
-
-The project is stronger than the original baseline, but there are still future improvements worth making:
-
-- deeper request-level integration tests
-- frontend production build verification on all environments
-- stronger admin player-management actions
-- richer event/referral/social systems
-- more persistent mission completion state
-- real push or in-app notification delivery
-- stronger provably-fair cryptographic proof workflow if product needs it
-
----
-
-## Summary
-
-Stake Mine is now a configurable full-stack mines platform with:
-
-- locked-board game integrity
-- recoverable session architecture
-- admin runtime controls
-- player engagement systems
-- fairness communication
-- leaderboard and progression
-- first-pass analytics and tests
-
-It is designed to evolve incrementally without replacing the existing core architecture or game algorithm.
+<div align="center">
+  Made with ❤️ by <a href="https://github.com/yashkale402">yashkale402</a>
+</div>
