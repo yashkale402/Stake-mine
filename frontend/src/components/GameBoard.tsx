@@ -75,6 +75,8 @@ export default function GameBoard() {
   const [shaking, setShaking] = useState(false);
   const [bursts, setBursts] = useState<Array<{ id: number; x: number; y: number; type: 'mine' | 'gem' }>>([]);
   const burstId = useRef(0);
+  // Prevent duplicate reveal calls on rapid clicks
+  const revealingRef = useRef<Set<number>>(new Set());
 
   const boardSize = activeGame?.board_size || 25;
   const revealed = activeGame?.revealed_cells || [];
@@ -100,6 +102,9 @@ export default function GameBoard() {
   const handleTileClick = async (index: number) => {
     if (!activeGame || !isGameActive || isLoading) return;
     if (revealed.includes(index)) return;
+    // Debounce: ignore if this tile is already being revealed
+    if (revealingRef.current.has(index)) return;
+    revealingRef.current.add(index);
 
     setIsLoading(true);
     setError(null);
@@ -140,6 +145,7 @@ export default function GameBoard() {
     } catch (err: any) {
       setError(err.message || 'Failed to reveal tile');
     } finally {
+      revealingRef.current.delete(index);
       setIsLoading(false);
     }
   };
@@ -226,10 +232,24 @@ export default function GameBoard() {
       </div>
 
       {!activeGame && (
-        <p className="mt-5 text-center text-sm text-stake-text">
-          Configure your bet on the left, then hit{' '}
-          <span className="font-semibold text-stake-accent">Bet & Play</span>
-        </p>
+        <div className="mt-4">
+          {/* Skeleton board */}
+          <div className="board-stage mx-auto max-w-[520px] rounded-[28px] border border-white/[0.05] p-3 sm:p-4">
+            <div className="mx-auto grid aspect-square w-full max-w-[460px] grid-cols-5 gap-2 sm:gap-2.5">
+              {Array.from({ length: 25 }).map((_, i) => (
+                <div
+                  key={i}
+                  className="aspect-square rounded-xl bg-white/[0.03] border border-white/[0.04]"
+                  style={{ animationDelay: `${i * 0.03}s` }}
+                />
+              ))}
+            </div>
+          </div>
+          <p className="mt-4 text-center text-sm text-stake-text">
+            Configure your bet on the left, then hit{' '}
+            <span className="font-semibold text-stake-accent">Bet & Play</span>
+          </p>
+        </div>
       )}
     </div>
   );

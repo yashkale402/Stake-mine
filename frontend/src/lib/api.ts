@@ -30,6 +30,13 @@ api.interceptors.response.use(
     enriched.statusCode = error.response?.status;
     if (payload?.activeGame) enriched.activeGame = payload.activeGame;
     if (payload?.finalState) enriched.finalState = payload.finalState;
+
+    // Auto-logout on 401 — token expired or invalid
+    if (error.response?.status === 401 && typeof window !== 'undefined') {
+      localStorage.removeItem('token');
+      window.location.href = '/login';
+    }
+
     return Promise.reject(enriched);
   }
 );

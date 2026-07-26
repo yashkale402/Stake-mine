@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 
 export interface ActiveGame {
   game_uuid: string;
@@ -33,27 +34,36 @@ interface GameState {
   resetGame: () => void;
 }
 
-export const useGameStore = create<GameState>((set) => ({
-  activeGame: null,
-  betAmountRupees: 10,
-  mineCount: 3,
-  isLoading: false,
-  error: null,
-  lastResultMessage: null,
+export const useGameStore = create<GameState>()(
+  persist(
+    (set) => ({
+      activeGame: null,
+      betAmountRupees: 10,
+      mineCount: 3,
+      isLoading: false,
+      error: null,
+      lastResultMessage: null,
 
-  setActiveGame: (game) =>
-    set({
-      activeGame: game
-        ? {
-            ...game,
-            revealed_cells: Array.isArray(game.revealed_cells) ? game.revealed_cells : [],
-          }
-        : null,
+      setActiveGame: (game) =>
+        set({
+          activeGame: game
+            ? { ...game, revealed_cells: Array.isArray(game.revealed_cells) ? game.revealed_cells : [] }
+            : null,
+        }),
+      setBetAmountRupees: (amount) => set({ betAmountRupees: amount }),
+      setMineCount: (count) => set({ mineCount: count }),
+      setIsLoading: (loading) => set({ isLoading: loading }),
+      setError: (error) => set({ error }),
+      setLastResultMessage: (message) => set({ lastResultMessage: message }),
+      resetGame: () => set({ activeGame: null, error: null, lastResultMessage: null }),
     }),
-  setBetAmountRupees: (amount) => set({ betAmountRupees: amount }),
-  setMineCount: (count) => set({ mineCount: count }),
-  setIsLoading: (loading) => set({ isLoading: loading }),
-  setError: (error) => set({ error }),
-  setLastResultMessage: (message) => set({ lastResultMessage: message }),
-  resetGame: () => set({ activeGame: null, error: null, lastResultMessage: null }),
-}));
+    {
+      name: 'stake-game-prefs',
+      // Only persist user preferences, not transient state
+      partialize: (state) => ({
+        betAmountRupees: state.betAmountRupees,
+        mineCount: state.mineCount,
+      }),
+    }
+  )
+);

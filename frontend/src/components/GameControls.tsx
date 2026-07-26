@@ -279,7 +279,7 @@ export default function GameControls() {
                   initial={{ scale: 0.7, opacity: 0, y: -6 }}
                   animate={{ scale: 1, opacity: 1, y: 0 }}
                   transition={{ type: 'spring', stiffness: 380, damping: 18 }}
-                  className="font-display text-3xl font-extrabold tracking-tight text-stake-accent drop-shadow-[0_0_12px_rgba(0,231,1,0.55)]"
+                  className="font-display text-2xl sm:text-3xl font-extrabold tracking-tight text-stake-accent drop-shadow-[0_0_12px_rgba(0,231,1,0.55)]"
                 >
                   {activeGame?.current_multiplier}x
                 </motion.span>
