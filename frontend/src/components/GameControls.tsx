@@ -179,12 +179,6 @@ export default function GameControls() {
   const glowSize = Math.min(60, 24 + (multiplier - 1) * 10);
   const cashoutPulseSpeed = Math.max(0.45, 2.4 - (multiplier - 1) * 0.28);
 
-  // Timer color
-  const timerColor = secondsLeft === null ? 'text-stake-text'
-    : secondsLeft <= 15 ? 'text-rose-400'
-    : secondsLeft <= 60 ? 'text-stake-gold'
-    : 'text-stake-text';
-
   return (
     <div className="panel flex h-full flex-col justify-between p-5 sm:p-6">
       <div>
@@ -268,45 +262,63 @@ export default function GameControls() {
         <AnimatePresence>
           {isGameActive && (
             <motion.div
-              initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }}
-              className="panel-inset mb-4 space-y-3 p-4"
+              initial={{ opacity: 0, y: 12, scale: 0.97 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 8, scale: 0.97 }}
+              transition={{ type: 'spring', stiffness: 260, damping: 22 }}
+              className="panel-inset mb-4 overflow-hidden p-0"
             >
-              <div className="flex items-center justify-between">
-                <span className="label-caps">Multiplier</span>
-                <div className="flex items-center gap-3">
+              {/* Multiplier row — full-width hero */}
+              <div className="relative flex items-center justify-between gap-2 border-b border-white/[0.05] px-4 py-3">
+                <div className="flex flex-col gap-0.5">
+                  <span className="label-caps">Multiplier</span>
                   <MultiplierSparkline history={multiplierHistory.current} />
-                  <motion.span
-                    key={activeGame?.current_multiplier}
-                    initial={{ scale: 0.75, opacity: 0.4 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    transition={{ type: 'spring', stiffness: 320, damping: 18 }}
-                    className="font-display text-2xl font-extrabold text-stake-accent"
-                  >
-                    {activeGame?.current_multiplier}x
-                  </motion.span>
                 </div>
+                <motion.span
+                  key={activeGame?.current_multiplier}
+                  initial={{ scale: 0.7, opacity: 0, y: -6 }}
+                  animate={{ scale: 1, opacity: 1, y: 0 }}
+                  transition={{ type: 'spring', stiffness: 380, damping: 18 }}
+                  className="font-display text-3xl font-extrabold tracking-tight text-stake-accent drop-shadow-[0_0_12px_rgba(0,231,1,0.55)]"
+                >
+                  {activeGame?.current_multiplier}x
+                </motion.span>
               </div>
-              <div className="h-px bg-white/[0.05]" />
-              <div className="flex items-center justify-between">
+
+              {/* Payout row */}
+              <div className="flex items-center justify-between border-b border-white/[0.05] px-4 py-3">
                 <span className="label-caps">Payout</span>
-                <span className="font-display text-xl font-extrabold text-stake-gold">
+                <span className="font-display text-2xl font-extrabold text-stake-gold drop-shadow-[0_0_10px_rgba(245,197,66,0.45)]">
                   Rs <AnimatedNumber value={currentPayoutRupees} />
                 </span>
               </div>
-              <div className="flex items-center justify-between text-xs text-stake-text">
-                <span>Revealed</span>
-                <span className="font-semibold text-white">
-                  {activeGame?.revealed_cells.length} / {(activeGame?.board_size ?? 25) - (activeGame?.mine_count ?? 0)}
-                </span>
-              </div>
-              {secondsLeft !== null && (
-                <div className={`flex items-center gap-1.5 text-xs font-semibold ${timerColor}`}>
-                  <Clock className="h-3.5 w-3.5" />
-                  <span>
-                    {secondsLeft <= 0 ? 'Expired' : `${Math.floor(secondsLeft / 60)}:${String(secondsLeft % 60).padStart(2, '0')} left`}
+
+              {/* Revealed + Timer row */}
+              <div className="flex items-center justify-between px-4 py-3">
+                <div className="flex flex-col gap-0.5">
+                  <span className="label-caps">Revealed</span>
+                  <span className="font-display text-base font-bold text-white">
+                    {activeGame?.revealed_cells.length}
+                    <span className="text-stake-text font-normal"> / {(activeGame?.board_size ?? 25) - (activeGame?.mine_count ?? 0)}</span>
                   </span>
                 </div>
-              )}
+                {secondsLeft !== null && (
+                  <motion.div
+                    animate={secondsLeft <= 15 ? { scale: [1, 1.06, 1] } : {}}
+                    transition={{ duration: 0.6, repeat: Infinity }}
+                    className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-bold ${
+                      secondsLeft <= 15
+                        ? 'border-rose-500/40 bg-rose-950/60 text-rose-400'
+                        : secondsLeft <= 60
+                        ? 'border-amber-500/30 bg-amber-950/40 text-stake-gold'
+                        : 'border-white/[0.06] bg-white/[0.03] text-stake-text'
+                    }`}
+                  >
+                    <Clock className="h-3.5 w-3.5" />
+                    {secondsLeft <= 0 ? 'Expired' : `${Math.floor(secondsLeft / 60)}:${String(secondsLeft % 60).padStart(2, '0')}`}
+                  </motion.div>
+                )}
+              </div>
             </motion.div>
           )}
         </AnimatePresence>
@@ -315,7 +327,8 @@ export default function GameControls() {
         <AnimatePresence>
           {isGameActive && (
             <motion.div
-              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 4 }}
+              transition={{ delay: 0.08 }}
               className="mb-4 rounded-xl border border-white/[0.05] bg-white/[0.025] p-3.5"
             >
               <div className="mb-2.5 flex items-center justify-between">
@@ -323,9 +336,17 @@ export default function GameControls() {
                   <Sparkles className="h-3.5 w-3.5 text-stake-accent" />
                   Momentum
                 </span>
-                <span className="text-xs font-bold text-white">{revealProgress}%</span>
+                <motion.span
+                  key={revealProgress}
+                  initial={{ scale: 1.3, color: '#00e701' }}
+                  animate={{ scale: 1, color: '#ffffff' }}
+                  transition={{ duration: 0.35 }}
+                  className="text-xs font-bold text-white"
+                >
+                  {revealProgress}%
+                </motion.span>
               </div>
-              <div className="h-2 overflow-hidden rounded-full bg-white/[0.05]">
+              <div className="h-2.5 overflow-hidden rounded-full bg-white/[0.05]">
                 <motion.div
                   className="h-full rounded-full bg-[linear-gradient(90deg,#00e701_0%,#8df76f_50%,#f5c542_100%)] animate-progress-sheen"
                   initial={{ width: 0 }}
