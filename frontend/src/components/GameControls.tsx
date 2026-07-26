@@ -1,31 +1,82 @@
 'use client';
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence, useSpring, useTransform, useMotionValue } from 'framer-motion';
 import toast from 'react-hot-toast';
 import { useGameStore } from '@/store/useGameStore';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useGameExpiry } from '@/lib/useGameExpiry';
 import api from '@/lib/api';
-import {
-  Bomb, Play, HandCoins, AlertCircle, RotateCcw, Sparkles, TimerReset, Clock,
-} from 'lucide-react';
+import { Bomb, Play, HandCoins, AlertCircle, RotateCcw, Sparkles, TimerReset, Clock } from 'lucide-react';
 
-// Animated number that springs to new value
+// ─── Animated spring number ───────────────────────────────────────────────────
 function AnimatedNumber({ value, prefix = '', suffix = '', className = '' }: {
   value: number; prefix?: string; suffix?: string; className?: string;
 }) {
-  const motionVal = useMotionValue(value);
-  const spring = useSpring(motionVal, { stiffness: 120, damping: 18 });
+  const mv = useMotionValue(value);
+  const spring = useSpring(mv, { stiffness: 110, damping: 16 });
   const display = useTransform(spring, (v) => `${prefix}${v.toFixed(2)}${suffix}`);
   const ref = useRef<HTMLSpanElement>(null);
-
-  useEffect(() => { motionVal.set(value); }, [value, motionVal]);
-  useEffect(() => {
-    return display.on('change', (v) => { if (ref.current) ref.current.textContent = v; });
-  }, [display]);
-
+  useEffect(() => { mv.set(value); }, [value, mv]);
+  useEffect(() => display.on('change', (v) => { if (ref.current) ref.current.textContent = v; }), [display]);
   return <span ref={ref} className={className}>{`${prefix}${value.toFixed(2)}${suffix}`}</span>;
+}
+
+// ─── Risk-o-meter ─────────────────────────────────────────────────────────────
+function RiskMeter({ mineCount }: { mineCount: number }) {
+  const pct = Math.round((mineCount / 24) * 100);
+  const color = pct < 30 ? '#00e701' : pct < 60 ? '#f5c542' : '#ff4d6d';
+  const label = pct < 30 ? 'Low Risk' : pct < 60 ? 'Medium Risk' : 'High Risk';
+  return (
+    <div className="mb-4 rounded-xl border border-white/[0.05] bg-[#080f18]/80 p-3">
+      <div className="mb-2 flex items-center justify-between">
+        <span className="label-caps">Risk Level</span>
+        <span className="text-xs font-bold" style={{ color }}>{label}</span>
+      </div>
+      <div className="h-2 overflow-hidden rounded-full bg-white/[0.06]">
+        <div
+          className="risk-bar-fill h-full rounded-full transition-all duration-500"
+          style={{ width: `${pct}%`, background: `linear-gradient(90deg, #00e701, ${color})` }}
+        />
+      </div>
+      <div className="mt-1.5 flex justify-between text-[10px] text-stake-text">
+        <span>Safe</span><span>Extreme</span>
+      </div>
+    </div>
+  );
+}
+
+// ─── Multiplier sparkline ─────────────────────────────────────────────────────
+function MultiplierSparkline({ history }: { history: number[] }) {
+  if (history.length < 2) return null;
+  const max = Math.max(...history);
+  const min = Math.min(...history);
+  const range = max - min || 1;
+  const W = 120, H = 32;
+  const pts = history.map((v, i) => {
+    const x = (i / (history.length - 1)) * W;
+    const y = H - ((v - min) / range) * (H - 4) - 2;
+    return `${x},${y}`;
+  }).join(' ');
+
+  return (
+    <svg width={W} height={H} className="overflow-visible">
+      <defs>
+        <linearGradient id="spark-grad" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stopColor="#00e701" stopOpacity="0.4" />
+          <stop offset="100%" stopColor="#f5c542" stopOpacity="0.9" />
+        </linearGradient>
+      </defs>
+      <polyline points={pts} fill="none" stroke="url(#spark-grad)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      {/* Last point dot */}
+      {(() => {
+        const last = history[history.length - 1];
+        const x = W;
+        const y = H - ((last - min) / range) * (H - 4) - 2;
+        return <circle cx={x} cy={y} r="3" fill="#f5c542" />;
+      })()}
+    </svg>
+  );
 }
 
 export default function GameControls() {
@@ -54,21 +105,24 @@ export default function GameControls() {
     ? Math.round((activeGame.revealed_cells.length / Math.max(1, activeGame.board_size - activeGame.mine_count)) * 100)
     : 0;
 
-  // Show toasts for result messages
+  // Track multiplier history for sparkline
+  const multiplierHistory = useRef<number[]>([1]);
+  useEffect(() => {
+    if (!isGameActive) { multiplierHistory.current = [1]; return; }
+    const last = multiplierHistory.current[multiplierHistory.current.length - 1];
+    if (multiplier !== last) multiplierHistory.current = [...multiplierHistory.current, multiplier];
+  }, [multiplier, isGameActive]);
+
+  // Toasts
   const prevMessage = useRef<string | null>(null);
   useEffect(() => {
     if (!lastResultMessage || lastResultMessage === prevMessage.current) return;
     prevMessage.current = lastResultMessage;
-    if (activeGame?.status === 'CASHED_OUT') {
-      toast.success(lastResultMessage, { icon: '💰', duration: 4000 });
-    } else if (activeGame?.status === 'LOST') {
-      toast.error(lastResultMessage, { icon: '💣', duration: 4000 });
-    } else {
-      toast(lastResultMessage, { duration: 2500 });
-    }
+    if (activeGame?.status === 'CASHED_OUT') toast.success(lastResultMessage, { icon: '💰', duration: 4000 });
+    else if (activeGame?.status === 'LOST') toast.error(lastResultMessage, { icon: '💣', duration: 4000 });
+    else toast(lastResultMessage, { duration: 2500 });
   }, [lastResultMessage, activeGame?.status]);
 
-  // Warn when expiry is close
   useEffect(() => {
     if (secondsLeft === 60) toast('⏱ 1 minute left — cash out soon!', { duration: 4000 });
     if (secondsLeft === 15) toast.error('⚠️ 15 seconds! Cash out now!', { duration: 5000 });
@@ -77,78 +131,66 @@ export default function GameControls() {
   const handleStartGame = async () => {
     if (!user) return;
     if (betAmountRupees <= 0) { setError('Bet amount must be greater than Rs 0'); return; }
-
-    setIsLoading(true);
-    setError(null);
-    setLastResultMessage(null);
-
+    setIsLoading(true); setError(null); setLastResultMessage(null);
     try {
       const res: any = await api.post('/game/start', {
         betAmountPaise: Math.round(betAmountRupees * 100),
         mineCount,
       });
       setActiveGame(res.data);
-      api.get('/auth/me').then((meRes: any) => {
-        if (meRes?.data?.balance_paise !== undefined) updateBalance(meRes.data.balance_paise);
+      api.get('/auth/me').then((r: any) => {
+        if (r?.data?.balance_paise !== undefined) updateBalance(r.data.balance_paise);
       }).catch(() => {});
     } catch (err: any) {
       if (err.activeGame?.game_uuid) {
         const g = err.activeGame;
         setActiveGame({
-          game_uuid: g.game_uuid,
-          board_size: g.board_size || 25,
-          total_cells: g.board_size || 25,
-          mine_count: g.mine_count || mineCount,
-          bet_amount_paise: g.bet_amount_paise || Math.round(betAmountRupees * 100),
-          current_multiplier: String(g.current_multiplier ?? '1.0000'),
-          status: 'ACTIVE',
-          revealed_cells: g.revealed_cells || [],
-          expires_at: g.expires_at,
+          game_uuid: g.game_uuid, board_size: g.board_size || 25, total_cells: g.board_size || 25,
+          mine_count: g.mine_count || mineCount, bet_amount_paise: g.bet_amount_paise || Math.round(betAmountRupees * 100),
+          current_multiplier: String(g.current_multiplier ?? '1.0000'), status: 'ACTIVE',
+          revealed_cells: g.revealed_cells || [], expires_at: g.expires_at,
         });
-        setLastResultMessage('Resumed your unfinished game.');
-        setError(null);
+        setLastResultMessage('Resumed your unfinished game.'); setError(null);
       } else {
         setError(err.message || 'Failed to start game');
       }
-    } finally {
-      setIsLoading(false);
-    }
+    } finally { setIsLoading(false); }
   };
 
   const handleCashout = async () => {
     if (!activeGame || !isGameActive) return;
-    setIsLoading(true);
-    setError(null);
-
+    setIsLoading(true); setError(null);
     try {
       const res: any = await api.post('/game/cashout', { gameUuid: activeGame.game_uuid });
       const data = res.data;
       setActiveGame({
-        ...activeGame,
-        status: 'CASHED_OUT',
-        mine_positions: data.mine_positions,
+        ...activeGame, status: 'CASHED_OUT', mine_positions: data.mine_positions,
         current_multiplier: data.final_multiplier || activeGame.current_multiplier,
-        current_payout_paise: data.payout_paise,
-        message: data.message,
+        current_payout_paise: data.payout_paise, message: data.message,
       });
       setLastResultMessage(data.message || 'Cashed out!');
       if (data.new_balance_paise !== undefined) updateBalance(data.new_balance_paise);
     } catch (err: any) {
       setError(err.message || 'Cashout failed');
-    } finally {
-      setIsLoading(false);
-    }
+    } finally { setIsLoading(false); }
   };
 
-  // Cashout button urgency: pulses faster as multiplier grows
-  const cashoutPulseSpeed = Math.max(0.5, 2.5 - (multiplier - 1) * 0.3);
+  // Cashout glow intensity scales with multiplier
+  const glowSize = Math.min(60, 24 + (multiplier - 1) * 10);
+  const cashoutPulseSpeed = Math.max(0.45, 2.4 - (multiplier - 1) * 0.28);
+
+  // Timer color
+  const timerColor = secondsLeft === null ? 'text-stake-text'
+    : secondsLeft <= 15 ? 'text-rose-400'
+    : secondsLeft <= 60 ? 'text-stake-gold'
+    : 'text-stake-text';
 
   return (
     <div className="panel flex h-full flex-col justify-between p-5 sm:p-6">
       <div>
         {/* Header */}
-        <div className="mb-5 flex items-center gap-2">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-stake-accent/15 text-stake-accent">
+        <div className="mb-5 flex items-center gap-2.5">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-stake-accent/12 text-stake-accent ring-1 ring-stake-accent/20">
             <Bomb className="h-5 w-5" />
           </div>
           <div>
@@ -163,10 +205,8 @@ export default function GameControls() {
         <AnimatePresence>
           {error && (
             <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              className="mb-4 flex items-start gap-2 rounded-xl border border-rose-800/60 bg-rose-950/50 p-3 text-sm text-rose-300"
+              initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
+              className="mb-4 flex items-start gap-2 rounded-xl border border-rose-800/50 bg-rose-950/50 p-3 text-sm text-rose-300"
             >
               <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
               <span>{error}</span>
@@ -179,33 +219,29 @@ export default function GameControls() {
           <label className="label-caps mb-2 block">Bet Amount (Rs)</label>
           <div className="relative">
             <input
-              type="number" min={1} step={1}
-              disabled={isGameActive}
+              type="number" min={1} step={1} disabled={isGameActive}
               value={betAmountRupees}
               onChange={(e) => setBetAmountRupees(Math.max(1, parseFloat(e.target.value) || 0))}
               className="input-field pr-24"
             />
             <div className="absolute right-2 top-1/2 flex -translate-y-1/2 gap-1">
-              <button type="button" disabled={isGameActive}
-                onClick={() => setBetAmountRupees(Math.max(1, Math.floor(betAmountRupees / 2)))}
-                className="rounded-lg bg-stake-cardHover px-2.5 py-1.5 text-xs font-semibold text-stake-text transition hover:text-white disabled:opacity-50">
-                1/2
-              </button>
-              <button type="button" disabled={isGameActive}
-                onClick={() => setBetAmountRupees(Number((betAmountRupees * 2).toFixed(2)))}
-                className="rounded-lg bg-stake-cardHover px-2.5 py-1.5 text-xs font-semibold text-stake-text transition hover:text-white disabled:opacity-50">
-                2x
-              </button>
+              {[['1/2', () => setBetAmountRupees(Math.max(1, Math.floor(betAmountRupees / 2)))], ['2x', () => setBetAmountRupees(Number((betAmountRupees * 2).toFixed(2)))]].map(([label, fn]) => (
+                <button key={label as string} type="button" disabled={isGameActive}
+                  onClick={fn as () => void}
+                  className="rounded-lg bg-white/[0.05] px-2.5 py-1.5 text-xs font-semibold text-stake-text transition hover:bg-white/[0.1] hover:text-white disabled:opacity-40">
+                  {label as string}
+                </button>
+              ))}
             </div>
           </div>
           <div className="mt-2 grid grid-cols-4 gap-1.5">
             {[10, 50, 100, 500].map((amt) => (
               <button key={amt} type="button" disabled={isGameActive}
                 onClick={() => setBetAmountRupees(amt)}
-                className={`rounded-lg border py-1.5 text-xs font-semibold transition disabled:opacity-50 ${
+                className={`rounded-lg border py-1.5 text-xs font-semibold transition disabled:opacity-40 ${
                   betAmountRupees === amt
-                    ? 'border-stake-accent/50 bg-stake-accent/10 text-stake-accent'
-                    : 'border-white/5 bg-stake-dark text-stake-text hover:text-white'
+                    ? 'border-stake-accent/50 bg-stake-accent/10 text-stake-accent shadow-[0_0_10px_rgba(0,231,1,0.15)]'
+                    : 'border-white/[0.05] bg-[#080f18] text-stake-text hover:text-white'
                 }`}>
                 Rs {amt}
               </button>
@@ -214,39 +250,43 @@ export default function GameControls() {
         </div>
 
         {/* Mines */}
-        <div className="mb-5">
+        <div className="mb-4">
           <label className="label-caps mb-2 block">Mines</label>
           <select disabled={isGameActive} value={mineCount}
             onChange={(e) => setMineCount(parseInt(e.target.value, 10))}
             className="input-field appearance-none">
             {Array.from({ length: 24 }, (_, i) => i + 1).map((m) => (
-              <option key={m} value={m}>{m} {m === 1 ? 'Mine' : 'Mines'} - {25 - m} Gems</option>
+              <option key={m} value={m}>{m} {m === 1 ? 'Mine' : 'Mines'} — {25 - m} Gems</option>
             ))}
           </select>
         </div>
+
+        {/* Risk meter — only when not in active game */}
+        {!isGameActive && <RiskMeter mineCount={mineCount} />}
 
         {/* Live stats */}
         <AnimatePresence>
           {isGameActive && (
             <motion.div
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 8 }}
-              className="panel-inset mb-5 space-y-3 p-4"
+              initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }}
+              className="panel-inset mb-4 space-y-3 p-4"
             >
               <div className="flex items-center justify-between">
                 <span className="label-caps">Multiplier</span>
-                <motion.span
-                  key={activeGame?.current_multiplier}
-                  initial={{ scale: 0.8, opacity: 0.5 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  transition={{ type: 'spring', stiffness: 300, damping: 18 }}
-                  className="font-display text-xl font-extrabold text-stake-accent"
-                >
-                  {activeGame?.current_multiplier}x
-                </motion.span>
+                <div className="flex items-center gap-3">
+                  <MultiplierSparkline history={multiplierHistory.current} />
+                  <motion.span
+                    key={activeGame?.current_multiplier}
+                    initial={{ scale: 0.75, opacity: 0.4 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    transition={{ type: 'spring', stiffness: 320, damping: 18 }}
+                    className="font-display text-2xl font-extrabold text-stake-accent"
+                  >
+                    {activeGame?.current_multiplier}x
+                  </motion.span>
+                </div>
               </div>
-              <div className="h-px bg-white/5" />
+              <div className="h-px bg-white/[0.05]" />
               <div className="flex items-center justify-between">
                 <span className="label-caps">Payout</span>
                 <span className="font-display text-xl font-extrabold text-stake-gold">
@@ -259,12 +299,8 @@ export default function GameControls() {
                   {activeGame?.revealed_cells.length} / {(activeGame?.board_size ?? 25) - (activeGame?.mine_count ?? 0)}
                 </span>
               </div>
-
-              {/* Expiry timer */}
               {secondsLeft !== null && (
-                <div className={`flex items-center gap-1.5 text-xs font-semibold ${
-                  secondsLeft <= 30 ? 'text-rose-400' : secondsLeft <= 60 ? 'text-stake-gold' : 'text-stake-text'
-                }`}>
+                <div className={`flex items-center gap-1.5 text-xs font-semibold ${timerColor}`}>
                   <Clock className="h-3.5 w-3.5" />
                   <span>
                     {secondsLeft <= 0 ? 'Expired' : `${Math.floor(secondsLeft / 60)}:${String(secondsLeft % 60).padStart(2, '0')} left`}
@@ -279,32 +315,30 @@ export default function GameControls() {
         <AnimatePresence>
           {isGameActive && (
             <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="mb-5 rounded-2xl border border-white/5 bg-white/[0.03] p-4"
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              className="mb-4 rounded-xl border border-white/[0.05] bg-white/[0.025] p-3.5"
             >
-              <div className="mb-3 flex items-center justify-between">
+              <div className="mb-2.5 flex items-center justify-between">
                 <span className="label-caps flex items-center gap-1.5">
                   <Sparkles className="h-3.5 w-3.5 text-stake-accent" />
-                  Session Momentum
+                  Momentum
                 </span>
-                <span className="text-xs font-semibold text-white">{revealProgress}% clear</span>
+                <span className="text-xs font-bold text-white">{revealProgress}%</span>
               </div>
-              <div className="h-2 overflow-hidden rounded-full bg-white/5">
+              <div className="h-2 overflow-hidden rounded-full bg-white/[0.05]">
                 <motion.div
-                  className="h-full rounded-full bg-[linear-gradient(90deg,#00e701_0%,#8df76f_50%,#f5c542_100%)]"
+                  className="h-full rounded-full bg-[linear-gradient(90deg,#00e701_0%,#8df76f_50%,#f5c542_100%)] animate-progress-sheen"
                   initial={{ width: 0 }}
                   animate={{ width: `${revealProgress}%` }}
-                  transition={{ type: 'spring', stiffness: 80, damping: 20 }}
+                  transition={{ type: 'spring', stiffness: 75, damping: 18 }}
                 />
               </div>
-              <div className="mt-3 flex items-center justify-between text-xs text-stake-text">
+              <div className="mt-2 flex items-center justify-between text-xs text-stake-text">
                 <span className="flex items-center gap-1">
                   <TimerReset className="h-3.5 w-3.5" />
-                  Keep a streak alive for stronger cashout pressure
+                  {activeGame?.revealed_cells.length} picks
                 </span>
-                <span>{activeGame?.revealed_cells.length} picks</span>
+                <span>{(activeGame?.board_size ?? 25) - (activeGame?.mine_count ?? 0) - (activeGame?.revealed_cells.length ?? 0)} remaining</span>
               </div>
             </motion.div>
           )}
@@ -336,9 +370,9 @@ export default function GameControls() {
             disabled={isLoading || !hasRevealedCells}
             animate={hasRevealedCells ? {
               boxShadow: [
-                '0 0 24px rgba(245,197,66,0.28)',
-                `0 0 ${20 + multiplier * 8}px rgba(245,197,66,0.65)`,
-                '0 0 24px rgba(245,197,66,0.28)',
+                `0 0 24px rgba(245,197,66,0.3)`,
+                `0 0 ${glowSize}px rgba(245,197,66,0.7)`,
+                `0 0 24px rgba(245,197,66,0.3)`,
               ],
             } : {}}
             transition={{ duration: cashoutPulseSpeed, repeat: Infinity, ease: 'easeInOut' }}
