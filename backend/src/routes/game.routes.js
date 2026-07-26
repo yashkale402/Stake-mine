@@ -10,11 +10,12 @@
 const { Router } = require('express');
 const gameController = require('../controllers/game.controller');
 const { authenticate } = require('../middleware/auth.middleware');
+const { gameRateLimiter } = require('../middleware/rateLimiter');
 
 const router = Router();
 
-// All game routes require authentication
 router.use(authenticate);
+router.use(gameRateLimiter);
 
 router.post('/start', gameController.startGame);
 router.post('/reveal', gameController.revealTile);

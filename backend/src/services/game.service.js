@@ -511,28 +511,35 @@ async function revealCell(userId, gameUuid, cellIndex) {
  * Handle a mine hit — settle the game as LOST.
  */
 async function _handleMineHit(gameState, cellIndex, minePositions) {
-  // Update Redis immediately (mark as LOST)
-  const updatedState = { ...gameState, status: 'LOST' };
-  // Clear game from Redis
+  // Settle LOST + insert history in a single transaction — no partial writes
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+    await gameRepository.settleGameLost(gameState.game_uuid, connection);
+    await gameRepository.insertHistory({
+      game_uuid:         gameState.game_uuid,
+      user_id:           gameState.user_id,
+      bet_amount_paise:  gameState.bet_amount_paise,
+      payout_paise:      0,
+      profit_loss_paise: -gameState.bet_amount_paise,
+      mine_count:        gameState.mine_count,
+      cells_revealed:    Array.isArray(gameState.revealed_cells)
+        ? gameState.revealed_cells.length
+        : 0,
+      final_multiplier:  gameState.current_multiplier,
+      outcome:           'LOSS',
+      slot_id:           gameState.slot_id,
+    }, connection);
+    await connection.commit();
+  } catch (err) {
+    await connection.rollback();
+    throw err;
+  } finally {
+    connection.release();
+  }
+
   await cacheRepository.deleteGameState(gameState.game_uuid);
   await cacheRepository.deleteActiveGamePointer(gameState.user_id);
-
-  // Settle in MySQL — awaited so a loss is never silently dropped
-  await gameRepository.settleGameLost(gameState.game_uuid);
-  await gameRepository.insertHistory({
-    game_uuid:         gameState.game_uuid,
-    user_id:           gameState.user_id,
-    bet_amount_paise:  gameState.bet_amount_paise,
-    payout_paise:      0,
-    profit_loss_paise: -gameState.bet_amount_paise,
-    mine_count:        gameState.mine_count,
-    cells_revealed:    Array.isArray(gameState.revealed_cells)
-      ? gameState.revealed_cells.length
-      : 0,
-    final_multiplier:  gameState.current_multiplier,
-    outcome:           'LOSS',
-    slot_id:           gameState.slot_id,
-  });
 
   logger.info(
     `[Game] MINE HIT: uuid=${gameState.game_uuid} cell=${cellIndex} user=${gameState.user_id}`
@@ -541,7 +548,7 @@ async function _handleMineHit(gameState, cellIndex, minePositions) {
   return {
     result:            'mine',
     cell_index:        cellIndex,
-    mine_positions:    minePositions,  // Reveal all mines after game over
+    mine_positions:    minePositions,
     revealed_cells:    gameState.revealed_cells || [],
     final_multiplier:  parseFloat(gameState.current_multiplier).toFixed(4),
     payout:            0,

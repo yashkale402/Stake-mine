@@ -221,6 +221,21 @@ async function getLatestAuditLogForActorAction(actor, action) {
   return rows[0] || null;
 }
 
+async function updateSlot(id, fields, updatedBy) {
+  const { budget_paise, slot_name, start_hour, end_hour, is_active } = fields;
+  await pool.query(
+    `UPDATE slot_configs SET
+      budget_paise  = COALESCE(?, budget_paise),
+      slot_name     = COALESCE(?, slot_name),
+      start_hour    = COALESCE(?, start_hour),
+      end_hour      = COALESCE(?, end_hour),
+      is_active     = COALESCE(?, is_active),
+      updated_by    = ?
+     WHERE id = ?`,
+    [budget_paise ?? null, slot_name ?? null, start_hour ?? null, end_hour ?? null, is_active ?? null, updatedBy, id]
+  );
+}
+
 module.exports = {
   getAllGlobalConfig,
   getGlobalConfig,
@@ -233,4 +248,5 @@ module.exports = {
   insertAuditLog,
   getRecentAuditLogs,
   getLatestAuditLogForActorAction,
+  updateSlot,
 };

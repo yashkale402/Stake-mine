@@ -9,7 +9,6 @@ const configService = require('../services/config.service');
 const configRepository = require('../repositories/config.repository');
 const userRepository = require('../repositories/user.repository');
 const gameRepository = require('../repositories/game.repository');
-const { pool } = require('../config/mysql');
 const { success } = require('../utils/response.helper');
 
 async function getConfigs(req, res, next) {
@@ -39,18 +38,7 @@ async function getSlots(req, res, next) {
 async function updateSlot(req, res, next) {
   try {
     const { id } = req.params;
-    const { budget_paise, slot_name, start_hour, end_hour, is_active } = req.body;
-    await pool.query(
-      `UPDATE slot_configs SET
-        budget_paise  = COALESCE(?, budget_paise),
-        slot_name     = COALESCE(?, slot_name),
-        start_hour    = COALESCE(?, start_hour),
-        end_hour      = COALESCE(?, end_hour),
-        is_active     = COALESCE(?, is_active),
-        updated_by    = ?
-       WHERE id = ?`,
-      [budget_paise ?? null, slot_name ?? null, start_hour ?? null, end_hour ?? null, is_active ?? null, req.user.username, id]
-    );
+    await configRepository.updateSlot(id, req.body, req.user.username);
     await configRepository.insertAuditLog({
       entity_type: 'SLOT', entity_id: id, action: 'SLOT_UPDATE',
       actor: req.user.username, payload: req.body,
@@ -104,7 +92,7 @@ async function getPlayerDetail(req, res, next) {
 async function suspendPlayer(req, res, next) {
   try {
     const { id } = req.params;
-    await pool.query(`UPDATE users SET status = 'SUSPENDED' WHERE id = ? AND role = 'PLAYER'`, [id]);
+    await userRepository.suspendPlayer(Number(id));
     await configRepository.insertAuditLog({
       entity_type: 'USER', entity_id: id, action: 'PLAYER_SUSPEND', actor: req.user.username,
     });
@@ -115,7 +103,7 @@ async function suspendPlayer(req, res, next) {
 async function activatePlayer(req, res, next) {
   try {
     const { id } = req.params;
-    await pool.query(`UPDATE users SET status = 'ACTIVE' WHERE id = ? AND role = 'PLAYER'`, [id]);
+    await userRepository.activatePlayer(Number(id));
     await configRepository.insertAuditLog({
       entity_type: 'USER', entity_id: id, action: 'PLAYER_ACTIVATE', actor: req.user.username,
     });
@@ -139,24 +127,7 @@ async function adjustPlayerBalance(req, res, next) {
 
 async function getSlotBudgetStatus(req, res, next) {
   try {
-    const today = new Date().toISOString().split('T')[0];
-    const [rows] = await pool.query(
-      `SELECT sc.id, sc.slot_name, sc.start_hour, sc.end_hour, sc.budget_paise, sc.is_active,
-              COALESCE(sbl.spent_paise, 0) AS spent_paise,
-              COALESCE(sbl.game_count, 0) AS game_count,
-              COALESCE(sbl.total_budget_paise, sc.budget_paise) AS total_budget_paise
-       FROM slot_configs sc
-       LEFT JOIN slot_budget_ledger sbl ON sbl.slot_id = sc.id AND sbl.slot_date = ?
-       ORDER BY sc.start_hour`,
-      [today]
-    );
-    const result = rows.map(r => ({
-      ...r,
-      spent_pct: r.total_budget_paise > 0
-        ? Math.round((r.spent_paise / r.total_budget_paise) * 100)
-        : 0,
-      remaining_paise: Math.max(0, r.total_budget_paise - r.spent_paise),
-    }));
+    const result = await configRepository.getSlotBudgetStatus();
     res.status(200).json(success(result));
   } catch (err) { next(err); }
 }

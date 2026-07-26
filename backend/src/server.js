@@ -42,7 +42,7 @@ function startExpiryCron() {
           bet_amount_paise:  game.bet_amount_paise,
           payout_paise:      0,
           profit_loss_paise: -game.bet_amount_paise,
-          mine_count:        0,
+          mine_count:        game.mine_count,
           cells_revealed:    0,
           final_multiplier:  1.0,
           outcome:           'LOSS',

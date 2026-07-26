@@ -17,5 +17,7 @@ ENV NODE_ENV=production
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
+# Ensure public dir exists at runtime even if empty
+RUN mkdir -p ./public
 EXPOSE 3000
 CMD ["node", "server.js"]

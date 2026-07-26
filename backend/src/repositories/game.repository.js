@@ -194,7 +194,7 @@ async function settleGameExpired(gameUuid) {
  */
 async function findExpiredActiveGames() {
   const [rows] = await pool.query(
-    `SELECT game_uuid, user_id, bet_amount_paise
+    `SELECT game_uuid, user_id, bet_amount_paise, mine_count
      FROM game_sessions
      WHERE status = 'ACTIVE' AND expires_at < NOW()`
   );

@@ -28,10 +28,20 @@ function buildRateLimitResponse(req) {
 
 const authRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 0, // 0 = unlimited
+  max: 10,
   standardHeaders: true,
   legacyHeaders: false,
-  skip: () => true, // rate limiting disabled
+  keyGenerator: buildRateLimitKey,
+  handler: (req, res) => {
+    res.status(429).json(buildRateLimitResponse(req));
+  },
+});
+
+const gameRateLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
   keyGenerator: buildRateLimitKey,
   handler: (req, res) => {
     res.status(429).json(buildRateLimitResponse(req));
@@ -40,6 +50,7 @@ const authRateLimiter = rateLimit({
 
 module.exports = {
   authRateLimiter,
+  gameRateLimiter,
   buildRateLimitKey,
   buildRateLimitResponse,
 };

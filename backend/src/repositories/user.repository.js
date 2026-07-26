@@ -159,6 +159,22 @@ async function getRecentPlayers(limit = 25) {
   return rows;
 }
 
+async function suspendPlayer(userId) {
+  const [result] = await pool.query(
+    `UPDATE users SET status = 'SUSPENDED' WHERE id = ? AND role = 'PLAYER'`,
+    [userId]
+  );
+  return result.affectedRows;
+}
+
+async function activatePlayer(userId) {
+  const [result] = await pool.query(
+    `UPDATE users SET status = 'ACTIVE' WHERE id = ? AND role = 'PLAYER'`,
+    [userId]
+  );
+  return result.affectedRows;
+}
+
 module.exports = {
   findAll,
   findById,
@@ -169,4 +185,6 @@ module.exports = {
   getBalance,
   getAdminUserMetrics,
   getRecentPlayers,
+  suspendPlayer,
+  activatePlayer,
 };
