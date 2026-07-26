@@ -142,6 +142,7 @@ services:
       dockerfile: Dockerfile
       args:
         NEXT_PUBLIC_API_URL: http://localhost:3001
+        INTERNAL_API_URL: http://backend:3001
 
     container_name: stake-frontend
     restart: unless-stopped
@@ -152,7 +153,7 @@ services:
     environment:
       NEXT_PUBLIC_API_URL: http://localhost:3001
       # Used by Next.js server-side rewrites inside the container
-      INTERNAL_API_URL: http://stake-backend:3001
+      INTERNAL_API_URL: http://backend:3001
 
     ports:
       - "3000:3000"
