@@ -1,20 +1,31 @@
 import './globals.css';
 import React from 'react';
-import { Syne, Manrope } from 'next/font/google';
+import localFont from 'next/font/local';
 import Providers from './providers';
 import Navbar from '@/components/Navbar';
 import ErrorBoundary from '@/components/ErrorBoundary';
 
-const display = Syne({
-  subsets: ['latin'],
+// Local fonts — no network call at build time (fixes Docker ETIMEDOUT)
+const display = localFont({
+  src: [
+    { path: '../../public/fonts/Syne-SemiBold.woff2', weight: '600', style: 'normal' },
+    { path: '../../public/fonts/Syne-Bold.woff2',     weight: '700', style: 'normal' },
+    { path: '../../public/fonts/Syne-ExtraBold.woff2',weight: '800', style: 'normal' },
+  ],
   variable: '--font-display',
-  weight: ['600', '700', '800'],
+  display: 'swap',
 });
 
-const body = Manrope({
-  subsets: ['latin'],
+const body = localFont({
+  src: [
+    { path: '../../public/fonts/Manrope-Regular.woff2',  weight: '400', style: 'normal' },
+    { path: '../../public/fonts/Manrope-Medium.woff2',   weight: '500', style: 'normal' },
+    { path: '../../public/fonts/Manrope-SemiBold.woff2', weight: '600', style: 'normal' },
+    { path: '../../public/fonts/Manrope-Bold.woff2',     weight: '700', style: 'normal' },
+    { path: '../../public/fonts/Manrope-ExtraBold.woff2',weight: '800', style: 'normal' },
+  ],
   variable: '--font-body',
-  weight: ['400', '500', '600', '700', '800'],
+  display: 'swap',
 });
 
 export const metadata = {
