@@ -24,6 +24,38 @@ const app    = require('./app');
 const { testConnection: testMySQL } = require('./config/mysql');
 const { runStartupMigrations }      = require('./config/migrate');
 const redisClient                   = require('./config/redis');
+const gameRepository                = require('./repositories/game.repository');
+const cacheRepository               = require('./repositories/cache.repository');
+
+// ── Expiry cron — runs every 60 s, expires stale ACTIVE games ────────────────
+function startExpiryCron() {
+  setInterval(async () => {
+    try {
+      const expired = await gameRepository.findExpiredActiveGames();
+      for (const game of expired) {
+        await gameRepository.settleGameExpired(game.game_uuid);
+        await cacheRepository.deleteGameState(game.game_uuid);
+        await cacheRepository.deleteActiveGamePointer(game.user_id);
+        await gameRepository.insertHistory({
+          game_uuid:         game.game_uuid,
+          user_id:           game.user_id,
+          bet_amount_paise:  game.bet_amount_paise,
+          payout_paise:      0,
+          profit_loss_paise: -game.bet_amount_paise,
+          mine_count:        0,
+          cells_revealed:    0,
+          final_multiplier:  1.0,
+          outcome:           'LOSS',
+          slot_id:           null,
+        });
+        logger.info(`[Cron] Expired game ${game.game_uuid} for user ${game.user_id}`);
+      }
+    } catch (err) {
+      logger.error(`[Cron] Expiry job failed: ${err.message}`);
+    }
+  }, 60_000);
+  logger.info('[Cron] Game expiry job started (60s interval)');
+}
 
 async function bootstrap() {
   try {
@@ -44,6 +76,9 @@ async function bootstrap() {
       logger.info(`📡 Environment: ${env.NODE_ENV}`);
       logger.info(`🏥 Health check: http://localhost:${env.PORT}/health`);
     });
+
+    // ── 5. Start expiry cron ─────────────────────────────────────────────────
+    startExpiryCron();
   } catch (err) {
     logger.error(err);
     logger.error(`❌ Failed to start server: ${err.message}`);

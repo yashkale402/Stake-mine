@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import api from '@/lib/api';
 
 export interface User {
   id: number;
@@ -14,7 +15,7 @@ interface AuthState {
   token: string | null;
   isAuthenticated: boolean;
   isHydrated: boolean;
-  initAuth: () => void;
+  initAuth: () => Promise<void>;
   setAuth: (user: User, token: string) => void;
   updateUser: (user: User) => void;
   updateBalance: (balancePaise: number) => void;
@@ -27,12 +28,24 @@ export const useAuthStore = create<AuthState>((set) => ({
   isAuthenticated: false,
   isHydrated: false,
 
-  initAuth: () => {
-    if (typeof window !== 'undefined') {
-      const token = localStorage.getItem('token');
-      set({ token, isAuthenticated: !!token, isHydrated: true });
-    } else {
+  initAuth: async () => {
+    if (typeof window === 'undefined') {
       set({ isHydrated: true });
+      return;
+    }
+    const token = localStorage.getItem('token');
+    if (!token) {
+      set({ token: null, isAuthenticated: false, isHydrated: true });
+      return;
+    }
+    // Token exists — fetch the user object immediately so user is never null after refresh
+    try {
+      const res: any = await api.get('/auth/me');
+      set({ token, user: res.data, isAuthenticated: true, isHydrated: true });
+    } catch {
+      // Token invalid/expired — clear it
+      localStorage.removeItem('token');
+      set({ token: null, user: null, isAuthenticated: false, isHydrated: true });
     }
   },
 

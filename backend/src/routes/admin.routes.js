@@ -17,8 +17,8 @@ router.post('/players/:id/balance', adminController.adjustPlayerBalance);
 router.get('/config', adminController.getConfigs);
 router.get('/config-history', adminController.getConfigHistory);
 router.put('/config', adminController.updateConfig);
-router.get('/slots', adminController.getSlots);
 router.get('/slots/budget-status', adminController.getSlotBudgetStatus);
+router.get('/slots', adminController.getSlots);
 router.put('/slots/:id', adminController.updateSlot);
 
 module.exports = router;

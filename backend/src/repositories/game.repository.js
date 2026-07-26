@@ -350,7 +350,7 @@ async function getPlayerSummaryStats(userId) {
     `
       SELECT
         COUNT(*) AS total_games,
-        SUM(CASE WHEN outcome = 'WIN' THEN 1 ELSE 0 END) AS wins,
+        SUM(CASE WHEN outcome = 'CASHOUT' THEN 1 ELSE 0 END) AS wins,
         SUM(CASE WHEN outcome = 'CASHOUT' THEN 1 ELSE 0 END) AS cashouts,
         SUM(CASE WHEN outcome = 'LOSS' THEN 1 ELSE 0 END) AS losses,
         COALESCE(SUM(bet_amount_paise), 0) AS total_wagered_paise,

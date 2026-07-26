@@ -127,7 +127,7 @@ export default function GameControls() {
 
   const balanceRupees = user ? (user.balance_paise / 100).toFixed(2) : '0.00';
   const revealProgress = activeGame
-    ? Math.round((activeGame.revealed_cells.length / Math.max(1, 25 - activeGame.mine_count)) * 100)
+    ? Math.round((activeGame.revealed_cells.length / Math.max(1, activeGame.board_size - activeGame.mine_count)) * 100)
     : 0;
 
   return (
@@ -240,7 +240,7 @@ export default function GameControls() {
             <div className="flex items-center justify-between text-xs text-stake-text">
               <span>Revealed</span>
               <span className="font-semibold text-white">
-                {activeGame.revealed_cells.length} / {25 - activeGame.mine_count}
+                {activeGame.revealed_cells.length} / {activeGame.board_size - activeGame.mine_count}
               </span>
             </div>
           </div>

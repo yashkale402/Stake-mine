@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/useAuthStore';
 import api from '@/lib/api';
@@ -41,7 +41,7 @@ export default function HistoryPage() {
     }
   }, [mounted, isHydrated, isAuthenticated, router]);
 
-  const fetchHistory = async (p = page) => {
+  const fetchHistory = useCallback(async (p = page) => {
     setLoading(true);
     setError(null);
     try {
@@ -53,13 +53,13 @@ export default function HistoryPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [page]);
 
   useEffect(() => {
     if (mounted && isHydrated && isAuthenticated) {
       fetchHistory(page);
     }
-  }, [mounted, isHydrated, isAuthenticated, page]);
+  }, [mounted, isHydrated, isAuthenticated, page, fetchHistory]);
 
   if (!mounted || !isHydrated) {
     return (
