@@ -1,3 +1,83 @@
+# Stake Mine
+
+Brief summary
+---------------
+Stake Mine is a two-tier web application: a Node.js backend that implements a cryptographically-secure "mine" betting game, and a Next.js frontend that provides the player UI. The system uses MySQL as the source of truth and Redis as a caching/coordination layer. The repo is containerised with `docker-compose.yml` for easy local/dev runs.
+
+**Key components**
+- **Backend**: [backend/](backend/) — Express app with controllers, services, repositories, Redis cache, MySQL persistence.
+- **Frontend**: [frontend/](frontend/) — Next.js app communicating with backend APIs.
+- **Database**: [mysql/init.sql](mysql/init.sql) — schema and initial data.
+- **Orchestration**: `docker-compose.yml` — compose for backend, frontend, MySQL, Redis (dev convenience).
+
+How it works (high level)
+-------------------------
+- Player actions originate from the frontend which calls REST API endpoints on the backend.
+- Controllers validate requests and call Service layer functions (e.g. game lifecycle in `backend/src/services/game.service.js`).
+- Services coordinate domain logic, call Repositories for DB access, and use CacheRepository for Redis operations.
+- MySQL stores canonical records (games, history, users). Redis stores active game state, idempotency keys and distributed locks to improve latency and ensure safe concurrency.
+
+Core algorithms (brief)
+----------------------
+- **Mine generation (CSPRNG + partial Fisher–Yates)**
+  - Implemented in `backend/src/services/game.service.js` via a cryptographically-secure partial Fisher–Yates shuffle to produce `mine_positions` at game start. Mines are generated once per game and are immutable for that game's lifetime.
+- **Multiplier calculation (actuarial probability)**
+  - The visible multiplier is computed from the probability of revealing only safe cells so far, adjusted by a configured house edge. Implemented as an incremental product to avoid factorials (see `computeMultiplier` in `game.service.js`).
+- **Risk engine**
+  - `backend/src/services/risk-engine.js` adjusts `mineCount` and `houseEdge` based on slot budget usage, player lifecycle (new player protection), and session loss streaks. This feeds into mine generation to balance payouts vs budget.
+
+Important data flows
+--------------------
+- Start Game: frontend -> controller -> `startGame()` service →
+  - validate, compute risk profile, generate `mine_positions` (CSPRNG), debit player (MySQL TX), create game row, cache full game state in Redis, set active-game pointer.
+- Reveal Cell: frontend -> controller -> `revealCell()` service →
+  - load state (Redis primary, MySQL fallback), idempotency check (Redis), check membership in pre-generated `mine_positions`, then either handle safe reveal (update multiplier, persist reveal state) or handle mine hit (settle loss in MySQL transaction, clear Redis).
+- Cashout: frontend -> controller -> `cashout()` service →
+  - acquire Redis cashout lock, recompute payout from cached multiplier, perform MySQL transaction to credit wallet and mark game settled, insert history, update slot budget ledger, clear Redis state, release lock.
+
+Concurrency & consistency
+-------------------------
+- Redis is used for low-latency active state and coordination (locks, idempotency, active-game pointer).
+- MySQL is the single source of truth; critical money actions (debit/credit, final settlement) happen inside MySQL transactions to ensure atomicity.
+- Cashouts use a distributed lock (Redis SET NX) plus conditional MySQL UPDATE (WHERE status='ACTIVE') to prevent double-settlement.
+- Reveal idempotency keys stored in Redis prevent duplicate processing when clients retry.
+
+Caching strategy and fallbacks
+-----------------------------
+- Active game state and budget ledgers are cached in Redis with TTLs. On Redis miss the services recover from MySQL and repopulate the cache.
+- Redis failures are logged but intentionally do not crash the game flow — MySQL fallbacks ensure correctness.
+
+Files to inspect for the implementation details
+----------------------------------------------
+- Game lifecycle & algorithms: [backend/src/services/game.service.js](backend/src/services/game.service.js)
+- Risk engine: [backend/src/services/risk-engine.js](backend/src/services/risk-engine.js)
+- Redis access / locking / idempotency: [backend/src/repositories/cache.repository.js](backend/src/repositories/cache.repository.js)
+- Repositories (DB access): [backend/src/repositories/](backend/src/repositories/)
+- Frontend API client: [frontend/src/lib/api.ts](frontend/src/lib/api.ts)
+- Docker compose: [docker-compose.yml](docker-compose.yml)
+
+Quickstart (dev)
+---------------
+1. Start services:
+
+```powershell
+docker compose up -d
+```
+
+2. Backend logs and tests:
+
+```powershell
+cd backend
+npm install
+npm test
+```
+
+Notes & next steps
+------------------
+- This README is a concise summary. If you want, I can:
+  - Add sequence diagrams (Mermaid) for start/reveal/cashout.
+  - Extract a one-page design doc for fairness & audits.
+  - Draft environment variable docs and local dev checklist.
 <div align="center">
 
 # 💣 Stake Mine
