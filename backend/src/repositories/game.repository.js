@@ -15,7 +15,7 @@
 const { pool } = require('../config/mysql');
 const budgetRepository = require('./budget.repository');
 const configRepository = require('./config.repository');
-const budgetService = require('../services/budget.service');
+const { v4: uuidv4 } = require('uuid');
 
 /**
  * Insert a new game session record (status = ACTIVE).
@@ -77,12 +77,24 @@ async function createGame(data, connection = null) {
       const reserveAmount = Math.min(potentialPayout, Math.floor(remaining * 0.9));
 
       try {
-        await budgetService.reserveBudgetForGame({
-          gameUuid: game_uuid,
-          userId: user_id,
-          slotLedgerId: gameRow.slot_ledger_id,
-          requestedPayoutPaise: reserveAmount,
-        }, connection || null);
+        if (reserveAmount > 0) {
+          const reservationUuid = uuidv4();
+          await budgetRepository.createReservation({
+            reservationUuid,
+            gameUuid: game_uuid,
+            userId: user_id,
+            slotLedgerId: gameRow.slot_ledger_id,
+            reservedPaise: reserveAmount,
+          }, connection || null);
+
+          await budgetRepository.insertBudgetHistory({
+            slotLedgerId: gameRow.slot_ledger_id,
+            changeType: 'RESERVATION',
+            amountPaise: reserveAmount,
+            reason: reserveAmount < potentialPayout ? 'GAME_START_PARTIAL_RESERVATION' : 'GAME_START_RESERVATION',
+            relatedUuid: game_uuid,
+          }, connection || null);
+        }
       } catch (err) {
         console.warn(`[Budget] reservation failed for game ${game_uuid}: ${err.message}`);
       }
@@ -187,7 +199,17 @@ async function settleGameCashout(gameUuid, payoutPaise, finalMultiplier, connect
 
   // Also settle any reservation for this game (if present)
   try {
-    await budgetService.settleReservationOnCashout(gameUuid, payoutPaise, connection || null);
+    await budgetRepository.settleReservationByGameUuid(gameUuid, payoutPaise, connection || null);
+    const reservation = await budgetRepository.findReservationByGameUuid(gameUuid, connection || null);
+    if (reservation) {
+      await budgetRepository.insertBudgetHistory({
+        slotLedgerId: reservation.slot_ledger_id,
+        changeType: 'SETTLEMENT',
+        amountPaise: payoutPaise,
+        reason: 'GAME_CASHOUT',
+        relatedUuid: gameUuid,
+      }, connection || null);
+    }
   } catch (err) {
     console.error('[Budget] failed to mark reservation settled:', err.message);
   }
@@ -215,7 +237,17 @@ async function settleGameLost(gameUuid, connection = null) {
 
   // Release any reservation associated with this game
   try {
-    await budgetService.releaseReservationOnLoss(gameUuid, connection || null);
+    const reservation = await budgetRepository.findReservationByGameUuid(gameUuid, connection || null);
+    if (reservation) {
+      await budgetRepository.releaseReservationByGameUuid(gameUuid, connection || null);
+      await budgetRepository.insertBudgetHistory({
+        slotLedgerId: reservation.slot_ledger_id,
+        changeType: 'RELEASE',
+        amountPaise: reservation.reserved_paise,
+        reason: 'GAME_LOSS_RELEASE',
+        relatedUuid: gameUuid,
+      }, connection || null);
+    }
   } catch (err) {
     console.error('[Budget] failed to release reservation:', err.message);
   }

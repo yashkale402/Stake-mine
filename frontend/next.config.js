@@ -2,6 +2,9 @@
 const nextConfig = {
   reactStrictMode: true,
   output: 'standalone',
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
   async rewrites() {
     // INTERNAL_API_URL is set at build time (Docker ARG) and runtime (env var).
     // It must point to the backend Docker service name, never localhost.

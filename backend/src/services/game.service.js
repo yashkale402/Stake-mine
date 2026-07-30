@@ -30,6 +30,7 @@ const { v4: uuidv4 }    = require('uuid');
 const configService      = require('./config.service');
 const { computeRiskProfile } = require('./risk-engine');
 const budgetService = require('./budget.service');
+const budgetRepository = require('../repositories/budget.repository');
 const gameRepository     = require('../repositories/game.repository');
 const userRepository     = require('../repositories/user.repository');
 const configRepository   = require('../repositories/config.repository');

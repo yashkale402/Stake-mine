@@ -72,8 +72,6 @@ export default function AdminPage() {
 
   useEffect(() => { if (mounted && isHydrated && isAuthenticated && user?.role === 'ADMIN') load(); }, [mounted, isHydrated, isAuthenticated, user, load]);
 
-  if (!mounted || !isHydrated || !isAuthenticated || user?.role !== 'ADMIN') return null;
-
   const handleSaveSlot = async (id: number) => {
     try {
       await api.put(`/admin/slots/${id}`, editSlot);
@@ -387,6 +385,8 @@ export default function AdminPage() {
     { key: 'config',   label: 'Config' },
     { key: 'logs',     label: 'Audit Logs' },
   ] as const;
+
+  if (!mounted || !isHydrated || !isAuthenticated || user?.role !== 'ADMIN') return null;
 
   return (
     <div className="mx-auto max-w-6xl animate-float-in space-y-6 py-2">

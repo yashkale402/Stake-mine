@@ -32,7 +32,7 @@ const PARTICLES = [
 
 export default function LoginPage() {
   const router = useRouter();
-  const { setAuth, isAuthenticated, isHydrated, initAuth } = useAuthStore();
+  const { setAuth, isAuthenticated, isHydrated, initAuth, user } = useAuthStore();
   const [isRegister, setIsRegister] = useState(false);
   const [loginMode, setLoginMode] = useState<'PLAYER' | 'ADMIN'>('PLAYER');
   const [username, setUsername] = useState('');
@@ -42,7 +42,10 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => { initAuth(); }, [initAuth]);
-  useEffect(() => { if (isHydrated && isAuthenticated) router.replace('/'); }, [isHydrated, isAuthenticated, router]);
+  useEffect(() => {
+    if (!isHydrated || !isAuthenticated) return;
+    router.replace(user?.role === 'ADMIN' ? '/admin' : '/');
+  }, [isHydrated, isAuthenticated, router, user]);
   useEffect(() => {
     if (loginMode === 'ADMIN') { setIsRegister(false); setEmail('admin@stake.mine'); setPassword(''); return; }
     if (!isRegister) { setEmail(''); setPassword(''); }
