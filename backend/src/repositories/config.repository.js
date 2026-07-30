@@ -221,6 +221,27 @@ async function getLatestAuditLogForActorAction(actor, action) {
   return rows[0] || null;
 }
 
+async function getBudgetLedgerById(ledgerId, connection = null) {
+  const db = connection || pool;
+  const [rows] = await db.query(
+    `SELECT id, slot_id, slot_date, total_budget_paise, spent_paise, game_count
+     FROM slot_budget_ledger WHERE id = ? LIMIT 1`,
+    [ledgerId]
+  );
+  return rows[0] || null;
+}
+
+async function getLatestRiskLevelAudit(slotId) {
+  const [rows] = await pool.query(
+    `SELECT id, payload, created_at
+     FROM audit_logs
+     WHERE entity_type = 'SLOT' AND entity_id = ? AND action = 'BUDGET_RISK_LEVEL_CHANGE'
+     ORDER BY created_at DESC LIMIT 1`,
+    [String(slotId)]
+  );
+  return rows[0] || null;
+}
+
 /**
  * Get budget utilisation for all active slots for today.
  * Joins slot_configs with today's ledger row (if any).
@@ -276,10 +297,12 @@ module.exports = {
   getAllSlots,
   getSlotByHour,
   getOrCreateBudgetLedger,
+  getBudgetLedgerById,
   incrementBudgetSpent,
   insertAuditLog,
   getRecentAuditLogs,
   getLatestAuditLogForActorAction,
+  getLatestRiskLevelAudit,
   updateSlot,
   getSlotBudgetStatus,
 };

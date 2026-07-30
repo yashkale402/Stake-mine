@@ -66,7 +66,8 @@ async function createGame(data, connection = null) {
       const maxMultCfg = await configRepository.getGlobalConfig('maximum_multiplier');
       const configuredMaxMultiplier = maxMultCfg ? Number(JSON.parse(maxMultCfg.config_value)) : 100;
 
-      const ledgerRow = await configRepository.getOrCreateBudgetLedger(gameRow.slot_ledger_id, new Date().toISOString().split('T')[0], 0);
+      const ledgerRow = await configRepository.getBudgetLedgerById(gameRow.slot_ledger_id, connection || null);
+      if (!ledgerRow) return gameRow;
       const totalBudget = Number(ledgerRow.total_budget_paise || 0);
       const spent = Number(ledgerRow.spent_paise || 0);
       const reserved = await require('./budget.repository').getActiveReservedSum(gameRow.slot_ledger_id, connection || null);
@@ -75,14 +76,12 @@ async function createGame(data, connection = null) {
       const potentialPayout = Math.floor(bet_amount_paise * configuredMaxMultiplier);
       const reserveAmount = Math.min(potentialPayout, Math.floor(remaining * 0.9));
 
-      if (reserveAmount > 0) {
-        await budgetService.reserveBudgetForGame({
+      await budgetService.reserveBudgetForGame({
           gameUuid: game_uuid,
           userId: user_id,
           slotLedgerId: gameRow.slot_ledger_id,
           requestedPayoutPaise: reserveAmount,
-        }, connection || null);
-      }
+      }, connection || null);
     }
   } catch (err) {
     throw err;

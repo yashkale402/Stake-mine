@@ -8,6 +8,7 @@ import GameControls from '@/components/GameControls';
 import GameBoard from '@/components/GameBoard';
 import PlayerExperiencePanel, { EngagementPayload } from '@/components/PlayerExperiencePanel';
 import TrustPanel from '@/components/TrustPanel';
+import GameCommandDeck from '@/components/GameCommandDeck';
 import api from '@/lib/api';
 import { useGameAudio } from '@/lib/useGameAudio';
 import { Sparkles } from 'lucide-react';
@@ -165,24 +166,27 @@ export default function Dashboard() {
 
   return (
     <div className="flex flex-col gap-5 animate-float-in">
-      <div className="hero-shell flex flex-col gap-4 overflow-hidden rounded-[28px] border border-white/8 px-5 py-6 sm:flex-row sm:items-end sm:justify-between sm:px-7">
+      <div className="hero-shell hero-command relative flex flex-col gap-5 overflow-hidden rounded-[28px] border border-white/8 px-5 py-6 sm:flex-row sm:items-end sm:justify-between sm:px-7">
+        <div className="hero-orb hero-orb-one" />
+        <div className="hero-orb hero-orb-two" />
         <div>
-          <p className="label-caps mb-1 flex items-center gap-1.5 text-stake-accent">
-            <Sparkles className="h-3.5 w-3.5" /> Live Mines Session
+          <p className="label-caps mb-2 flex items-center gap-1.5 text-stake-accent">
+            <span className="h-1.5 w-1.5 rounded-full bg-stake-accent animate-live-dot" /> <Sparkles className="h-3.5 w-3.5" /> Live strategy arena
           </p>
-          <h1 className="font-display text-2xl font-extrabold tracking-tight text-white md:text-3xl">
-            Pick gems. Dodge mines. Cash out.
+          <h1 className="max-w-2xl font-display text-3xl font-extrabold tracking-tight text-white md:text-4xl">
+            Every pick is a <span className="shimmer-text">moment of conviction.</span>
           </h1>
           <p className="mt-2 max-w-2xl text-sm text-stake-text">
-            This first upgrade pass adds tutorial guidance, trust details, progression, rewards, missions, and leaderboard feedback on top of the core game.
+            A focused, real-time minefield built for fast decisions, clear feedback, and an uninterrupted game flow.
           </p>
         </div>
-        {restoring && (
-          <span className="rounded-full border border-stake-accent/20 bg-stake-accent/10 px-3 py-1 text-xs text-stake-text">
-            Restoring active session...
-          </span>
-        )}
+        <div className="relative flex items-center gap-2">
+          <span className="rounded-full border border-white/10 bg-black/15 px-3 py-1.5 text-xs font-semibold text-white/80">5 × 5 board</span>
+          {restoring && <span className="rounded-full border border-stake-accent/20 bg-stake-accent/10 px-3 py-1.5 text-xs text-stake-text">Restoring session...</span>}
+        </div>
       </div>
+
+      <GameCommandDeck />
 
       {isTerminal && (
         <div

@@ -266,6 +266,7 @@ export default function AdminPage() {
           <p className="text-sm text-stake-text">Budget is shared across ALL players per slot window. The risk engine tightens mines automatically as budget is consumed.</p>
           {budgetStatus.map((slot: any) => {
             const isEditing = editingSlot === slot.id;
+<<<<<<< HEAD
             // Safe numeric coercions and fallbacks
             const startHour = (slot && slot.start_hour !== undefined && slot.start_hour !== null) ? slot.start_hour : null;
             const endHour = (slot && slot.end_hour !== undefined && slot.end_hour !== null) ? slot.end_hour : null;
@@ -274,6 +275,14 @@ export default function AdminPage() {
             const spentPaise = Number(slot.spent_paise || 0);
             const remainingPaise = Number(slot.remaining_paise ?? (totalBudgetPaise - spentPaise));
             const spentPct = Number.isFinite(Number(slot.spent_pct)) ? Number(slot.spent_pct) : (totalBudgetPaise > 0 ? Math.round((spentPaise / totalBudgetPaise) * 100 * 100) / 100 : 0);
+=======
+            const riskMeta: Record<string, { badge: string; className: string }> = {
+              NORMAL: { badge: '🟢 Normal', className: 'text-stake-accent' }, LOW: { badge: '🟡 Low Risk', className: 'text-yellow-300' },
+              MEDIUM: { badge: '🟠 Medium Risk', className: 'text-orange-400' }, HIGH: { badge: '🔴 High Risk', className: 'text-rose-400' },
+              CRITICAL: { badge: '⚫ Critical Protection', className: 'text-slate-300' },
+            };
+            const risk = riskMeta[slot.current_risk_level] || riskMeta.NORMAL;
+>>>>>>> 940ee2a40ebd1a5f88529414ed09c5057973aa2b
             return (
               <div key={slot.id} className="panel p-5">
                 <div className="flex items-center justify-between mb-3">
@@ -281,7 +290,12 @@ export default function AdminPage() {
                     <p className="font-display font-bold text-white text-lg">{slot.slot_name || 'Slot'}</p>
                     <p className="text-xs text-stake-text">{startHour !== null ? String(startHour).padStart(2,'0') + ':00' : '--:--'} · {endHour !== null ? String(endHour).padStart(2,'0') + ':00' : '--:--'} · {slot.is_active ? <span className="text-stake-accent">Active</span> : <span className="text-rose-400">Inactive</span>}</p>
                   </div>
+<<<<<<< HEAD
                   <button onClick={() => { setEditingSlot(isEditing ? null : slot.id); setEditSlot({ budget_paise: slot.configured_budget_paise ?? slot.total_budget_paise ?? 0, slot_name: slot.slot_name, is_active: slot.is_active }); }}
+=======
+                  <div className={`text-xs font-bold ${risk.className}`}>{risk.badge}</div>
+                  <button onClick={() => { setEditingSlot(isEditing ? null : slot.id); setEditSlot({ budget_paise: slot.budget_paise, slot_name: slot.slot_name, is_active: slot.is_active }); }}
+>>>>>>> 940ee2a40ebd1a5f88529414ed09c5057973aa2b
                     className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-white hover:bg-white/10 transition flex items-center gap-1">
                     {isEditing ? <><ChevronUp className="h-3.5 w-3.5"/> Cancel</> : <><ChevronDown className="h-3.5 w-3.5"/> Edit</>}
                   </button>
@@ -290,12 +304,21 @@ export default function AdminPage() {
                 {/* Budget bar */}
                 <div className="mb-3">
                   <div className="flex justify-between text-xs mb-1">
+<<<<<<< HEAD
                     <span className="text-stake-text">Budget used: <span className="font-bold text-white">{spentPct}%</span></span>
                     <span className="text-stake-text">₹{(spentPaise/100).toFixed(0)} / ₹{(totalBudgetPaise/100).toFixed(0)}</span>
                   </div>
                   <div className="h-2.5 rounded-full bg-white/5 overflow-hidden">
                     <div className={`h-full rounded-full transition-all ${spentPct >= 90 ? 'bg-rose-500' : spentPct >= 70 ? 'bg-amber-400' : 'bg-stake-accent'}`}
                       style={{ width: `${spentPct}%` }}/>
+=======
+                    <span className="text-stake-text">Budget usage: <span className="font-bold text-white">{slot.budget_usage_pct ?? slot.spent_pct}%</span></span>
+                    <span className="text-stake-text">₹{(slot.spent_paise/100).toFixed(0)} / ₹{(slot.total_budget_paise/100).toFixed(0)}</span>
+                  </div>
+                  <div className="h-2.5 rounded-full bg-white/5 overflow-hidden">
+                    <div className={`h-full rounded-full transition-all ${slot.spent_pct >= 90 ? 'bg-rose-500' : slot.spent_pct >= 70 ? 'bg-amber-400' : 'bg-stake-accent'}`}
+                      style={{ width: `${Math.min(100, slot.budget_usage_pct ?? slot.spent_pct)}%` }}/>
+>>>>>>> 940ee2a40ebd1a5f88529414ed09c5057973aa2b
                   </div>
                   <p className="mt-1 text-xs text-stake-text">
                     Remaining: <span className="font-bold text-stake-gold">₹{(remainingPaise/100).toFixed(0)}</span>
@@ -304,6 +327,11 @@ export default function AdminPage() {
                     {spentPct >= 70 && spentPct < 90 && <span className="ml-2 text-amber-400 font-bold">⚠ HIGH — mines tightened</span>}
                   </p>
                 </div>
+
+                <p className="mb-3 text-xs text-stake-text">
+                  Protection: <span className="font-bold text-white">{slot.protection_status || 'INACTIVE'}</span>
+                  {slot.last_risk_level_change && <> · Last change: {new Date(slot.last_risk_level_change).toLocaleString()} · Active since: {new Date(slot.active_since).toLocaleString()}</>}
+                </p>
 
                 {isEditing && (
                   <div className="rounded-xl border border-white/5 bg-stake-dark/60 p-4 space-y-3">

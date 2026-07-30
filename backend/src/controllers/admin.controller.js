@@ -9,6 +9,7 @@ const configService = require('../services/config.service');
 const configRepository = require('../repositories/config.repository');
 const userRepository = require('../repositories/user.repository');
 const gameRepository = require('../repositories/game.repository');
+const budgetService = require('../services/budget.service');
 const { success } = require('../utils/response.helper');
 
 async function getConfigs(req, res, next) {
@@ -148,7 +149,7 @@ async function adjustPlayerBalance(req, res, next) {
 
 async function getSlotBudgetStatus(req, res, next) {
   try {
-    const result = await configRepository.getSlotBudgetStatus();
+    const result = await budgetService.getRiskDashboard();
     res.status(200).json(success(result));
   } catch (err) { next(err); }
 }

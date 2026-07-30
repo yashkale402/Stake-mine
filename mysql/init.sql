@@ -178,6 +178,11 @@ INSERT INTO global_config (config_key, config_value, description) VALUES
 ('house_edge',           '0.05',         'House edge fraction (5%)'),
 ('multiplier_formula',   '"ACTUARIAL"',  'Multiplier model: ACTUARIAL | CUSTOM'),
 ('budget_tolerance_pct', '0.05',         'Allowed budget overshoot fraction (5%)'),
+('risk_normal_threshold_pct', '50',       'Maximum budget usage percentage for Normal mode'),
+('risk_low_threshold_pct',    '75',       'Maximum budget usage percentage for Low Risk mode'),
+('risk_medium_threshold_pct', '90',       'Maximum budget usage percentage for Medium Risk mode'),
+('risk_high_threshold_pct',   '100',      'Maximum budget usage percentage for High Risk mode'),
+('risk_critical_threshold_pct','100',     'Usage percentage above which Critical Protection applies'),
 ('config_cache_ttl',     '300',          'Seconds to cache effective config in Redis')
 ON DUPLICATE KEY UPDATE config_value = VALUES(config_value);
 
