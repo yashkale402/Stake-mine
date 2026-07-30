@@ -37,6 +37,7 @@ const configRepository   = require('../repositories/config.repository');
 const cacheRepository    = require('../repositories/cache.repository');
 const { pool }           = require('../config/mysql');
 const logger             = require('../logger/logger');
+const socketEmitter      = require('../lib/socket-emitter');
 
 // ══════════════════════════════════════════════════════════════════════════════
 // SECTION 1 — MINE GENERATION (Cryptographically Secure)
@@ -396,6 +397,8 @@ async function startGame(userId, betAmountPaise, mineCount) {
     `bet=${betAmountPaise}p mines=${mineCount}/${boardSize}`
   );
 
+  socketEmitter.emitGameUpdate(userId, _sanitizeGameState(gameState));
+
   // ── 12. Return board state WITHOUT mine positions ─────────────────────────
   return {
     game_uuid:          gameUuid,
@@ -561,6 +564,23 @@ async function _handleMineHit(gameState, cellIndex, minePositions) {
     `[Game] MINE HIT: uuid=${gameState.game_uuid} cell=${cellIndex} user=${gameState.user_id}`
   );
 
+  const terminalState = {
+    game_uuid:       gameState.game_uuid,
+    status:          'LOST',
+    bet_amount_paise: gameState.bet_amount_paise,
+    board_size:      gameState.board_size,
+    mine_count:      gameState.mine_count,
+    current_multiplier: gameState.current_multiplier,
+    revealed_cells:  gameState.revealed_cells || [],
+    mine_positions:  minePositions,
+    final_multiplier: parseFloat(gameState.current_multiplier).toFixed(4),
+    payout_paise:    0,
+    payout_formatted:'₹0.00',
+    message:         '💥 BOOM! You hit a mine!',
+  };
+
+  socketEmitter.emitGameUpdate(gameState.user_id, _sanitizeGameState(terminalState));
+
   return {
     result:            'mine',
     cell_index:        cellIndex,
@@ -642,6 +662,13 @@ async function _handleSafeReveal(gameState, cellIndex, revealedCells, minePositi
       message:                 '🏆 You revealed all safe cells! Auto-cashed out.',
     };
   }
+
+  const state = {
+    ...updatedState,
+    current_multiplier: newMultiplier.toFixed(4),
+    current_payout_paise: currentPayoutPaise,
+  };
+  socketEmitter.emitGameUpdate(gameState.user_id, _sanitizeGameState(state));
 
   return {
     result:                  'safe',
@@ -816,6 +843,16 @@ async function cashout(userId, gameUuid) {
     const minePositions = Array.isArray(gameState.mine_positions)
       ? gameState.mine_positions
       : JSON.parse(gameState.mine_positions || '[]');
+
+    const terminalState = _sanitizeGameState({
+      ...gameState,
+      status: 'CASHED_OUT',
+      mine_positions: minePositions,
+      current_multiplier: finalMultiplier.toFixed(4),
+      payout_paise: payoutPaise,
+    });
+
+    socketEmitter.emitGameUpdate(userId, terminalState);
 
     logger.info(
       `[Game] CASHOUT: uuid=${gameUuid} user=${userId} ` +
@@ -1053,6 +1090,15 @@ async function _expireGame(gameState) {
     });
   } catch (err) {
     logger.error(`[Game] Failed to expire game ${gameState.game_uuid}: ${err.message}`);
+  }
+
+  try {
+    socketEmitter.emitGameUpdate(gameState.user_id, _sanitizeGameState({
+      ...gameState,
+      status: 'EXPIRED',
+    }));
+  } catch (err) {
+    logger.warn(`[Socket] Failed to emit expiry update for user ${gameState.user_id}: ${err.message}`);
   }
 }
 

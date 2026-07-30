@@ -11,6 +11,7 @@ import TrustPanel from '@/components/TrustPanel';
 import GameCommandDeck from '@/components/GameCommandDeck';
 import api from '@/lib/api';
 import { useGameAudio } from '@/lib/useGameAudio';
+import { initSocket, cleanupSocket, ensureSocketConnected } from '@/lib/socket';
 import { Sparkles } from 'lucide-react';
 
 interface FairnessPayload {
@@ -96,6 +97,24 @@ export default function Dashboard() {
       cancelled = true;
     };
   }, [mounted, isAuthenticated, activeGame, setActiveGame, setLastResultMessage]);
+
+  useEffect(() => {
+    if (!mounted || !isAuthenticated) return;
+
+    initSocket();
+    ensureSocketConnected();
+
+    const handleUnload = () => {
+      cleanupSocket();
+    };
+
+    window.addEventListener('beforeunload', handleUnload);
+
+    return () => {
+      cleanupSocket();
+      window.removeEventListener('beforeunload', handleUnload);
+    };
+  }, [mounted, isAuthenticated]);
 
   useEffect(() => {
     if (!mounted || !isAuthenticated) return;

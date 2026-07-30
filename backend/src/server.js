@@ -17,15 +17,19 @@
 'use strict';
 
 // Load env first — everything else depends on it
+const http   = require('http');
+const jwt    = require('jsonwebtoken');
 const env    = require('./config/env');
 const logger = require('./logger/logger');
 const app    = require('./app');
 
+const { Server } = require('socket.io');
 const { testConnection: testMySQL } = require('./config/mysql');
 const { runStartupMigrations }      = require('./config/migrate');
 const redisClient                   = require('./config/redis');
 const gameRepository                = require('./repositories/game.repository');
 const cacheRepository               = require('./repositories/cache.repository');
+const socketEmitter                 = require('./lib/socket-emitter');
 
 // ── Expiry cron — runs every 60 s, expires stale ACTIVE games ────────────────
 function startExpiryCron() {
@@ -70,8 +74,51 @@ async function bootstrap() {
     // ── 3. Lightweight schema migrations (role column, admin seed) ───────────
     await runStartupMigrations();
 
-    // ── 4. Start HTTP server ─────────────────────────────────────────────────
-    app.listen(env.PORT, () => {
+    // ── 4. Start HTTP + WebSocket server ───────────────────────────────────────
+    const httpServer = http.createServer(app);
+    const io = new Server(httpServer, {
+      cors: {
+        origin: process.env.ALLOWED_ORIGIN || '*',
+        methods: ['GET', 'POST'],
+      },
+      path: '/socket.io',
+      transports: ['websocket'],
+    });
+
+    io.use((socket, next) => {
+      const authToken = socket.handshake.auth?.token ||
+        (socket.handshake.headers?.authorization || '').replace(/^Bearer\s+/i, '');
+
+      if (!authToken) {
+        return next(new Error('Authentication error'));
+      }
+
+      try {
+        const decoded = jwt.verify(authToken, env.JWT_SECRET);
+        socket.user = {
+          id: decoded.id,
+          role: decoded.role || 'PLAYER',
+        };
+        return next();
+      } catch (err) {
+        logger.warn(`[Socket] JWT verification failed: ${err.message}`);
+        return next(new Error('Authentication error'));
+      }
+    });
+
+    io.on('connection', (socket) => {
+      const room = `user:${socket.user.id}`;
+      socket.join(room);
+      logger.info(`[Socket] user=${socket.user.id} connected and joined room=${room}`);
+
+      socket.on('disconnect', (reason) => {
+        logger.info(`[Socket] user=${socket.user.id} disconnected: ${reason}`);
+      });
+    });
+
+    socketEmitter.setIo(io);
+
+    httpServer.listen(env.PORT, () => {
       logger.info(`✅ Server running on http://localhost:${env.PORT}`);
       logger.info(`📡 Environment: ${env.NODE_ENV}`);
       logger.info(`🏥 Health check: http://localhost:${env.PORT}/health`);

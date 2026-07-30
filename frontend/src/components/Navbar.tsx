@@ -7,6 +7,7 @@ import { useAuthStore } from '@/store/useAuthStore';
 import api from '@/lib/api';
 import { Bomb, Wallet, LogOut, History, Settings, X, Volume2, VolumeX } from 'lucide-react';
 import { useGameStore } from '@/store/useGameStore';
+import { cleanupSocket } from '@/lib/socket';
 import { isMuted, setMuted } from '@/lib/useGameAudio';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -131,7 +132,7 @@ export default function Navbar() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => { logout(); useGameStore.getState().resetGame(); router.push('/login'); }}
+                  onClick={() => { logout(); cleanupSocket(); useGameStore.getState().resetGame(); router.push('/login'); }}
                   className="rounded-lg p-2 text-stake-text transition hover:bg-white/[0.05] hover:text-rose-400"
                   title="Logout"
                 >

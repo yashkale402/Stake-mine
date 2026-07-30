@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/useAuthStore';
 import api from '@/lib/api';
+import { initSocket } from '@/lib/socket';
 import { Bomb, Lock, Mail, Shield, User as UserIcon } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -59,6 +60,7 @@ export default function LoginPage() {
       const payload = isRegister ? { username, email, password } : { email, password };
       const res: any = await api.post(endpoint, payload);
       setAuth(res.data.user, res.data.token);
+      initSocket();
       router.push(res.data.user?.role === 'ADMIN' ? '/admin' : '/');
     } catch (err: any) {
       setError(err.message || 'Authentication failed');
