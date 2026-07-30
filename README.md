@@ -78,6 +78,42 @@ Notes & next steps
   - Add sequence diagrams (Mermaid) for start/reveal/cashout.
   - Extract a one-page design doc for fairness & audits.
   - Draft environment variable docs and local dev checklist.
+
+Algorithms & internals (brief)
+------------------------------
+This section briefly explains the main algorithms the system uses and where to find their implementation.
+
+- Mine generation (CSPRNG + partial Fisher–Yates):
+  - What it does: picks `mineCount` unique indices from the board using cryptographically-secure random bytes and a partial Fisher–Yates shuffle so selections are uniformly random without modulo bias.
+  - Why: guarantees unbiased, auditable mine placement and prevents predictable patterns.
+  - Where: [backend/src/services/game.service.js](backend/src/services/game.service.js) — `generateMinePositions()` and `_secureRandomInt()`.
+
+- Multiplier calculation (actuarial probability):
+  - What it does: computes the displayed payout multiplier as the inverse of the probability of safely revealing the current number of cells, adjusted by the configured house edge.
+  - Why: produces provably consistent multipliers tied to combinatorial probabilities rather than heuristic scaling.
+  - Where: [backend/src/services/game.service.js](backend/src/services/game.service.js) — `computeMultiplier()`.
+
+- Risk engine (budget-aware adjustments):
+  - What it does: adjusts mine count and effective house edge based on slot budget consumption, player lifecycle, and session streaks to protect budget while preserving player experience.
+  - Where: [backend/src/services/risk-engine.js](backend/src/services/risk-engine.js).
+
+- Budget & Quote engine (new):
+  - What it does: maintains per-slot budgets, creates per-game reservations for maximum allowed payouts, and computes conservative quotes that cap exposure per round; records audit history for reservations, settlements and releases.
+  - Key rules: reservations are made atomically during game creation; cashout settles reservation and moves actual payout into used budget; losses release reservations back to available budget.
+  - Where: repository/service files under [backend/src/repositories/budget.repository.js](backend/src/repositories/budget.repository.js) and [backend/src/services/budget.service.js](backend/src/services/budget.service.js); quote logic in [backend/src/services/quote-engine.service.js](backend/src/services/quote-engine.service.js).
+
+- Player profiling (heuristics):
+  - What it does: classifies players (NEW_PLAYER, NORMAL, HIGH_ROLLER, LOSS_RECOVERY) using historical stats to slightly bias quote behaviour.
+  - Where: [backend/src/services/player-profile.service.js](backend/src/services/player-profile.service.js).
+
+Design decisions & safety
+------------------------
+- MySQL is the single source of truth — all final money movements occur inside DB transactions.
+- Redis is used for active-session caching, idempotency, and short-lived locks; budget state is cached but rebuilt from MySQL if Redis restarts.
+- Reservations live in MySQL (`budget_reservations`) so exposure survives cache failures and server restarts.
+- The quote engine only limits exposure; it does not influence mine positions or alter game fairness.
+
+If you want, I can expand any of these subsections into a 1-page technical note or add Mermaid diagrams showing the flows.
 <div align="center">
 
 # 💣 Stake Mine

@@ -38,7 +38,28 @@ async function getSlots(req, res, next) {
 async function updateSlot(req, res, next) {
   try {
     const { id } = req.params;
-    await configRepository.updateSlot(id, req.body, req.user.username);
+    // Sanitize and validate incoming fields to avoid 'undefined' strings or NaN
+    const body = req.body || {};
+    const fields = {};
+    if (typeof body.slot_name !== 'undefined') fields.slot_name = String(body.slot_name);
+    if (typeof body.budget_paise !== 'undefined' && body.budget_paise !== null) {
+      const v = Number(body.budget_paise);
+      if (Number.isFinite(v) && v >= 0) fields.budget_paise = Math.round(v);
+      else { const e = new Error('Invalid budget_paise'); e.statusCode = 400; throw e; }
+    }
+    if (typeof body.start_hour !== 'undefined') {
+      const h = parseInt(body.start_hour, 10);
+      if (!Number.isNaN(h) && h >= 0 && h <= 23) fields.start_hour = h;
+      else { const e = new Error('Invalid start_hour'); e.statusCode = 400; throw e; }
+    }
+    if (typeof body.end_hour !== 'undefined') {
+      const h = parseInt(body.end_hour, 10);
+      if (!Number.isNaN(h) && h >= 0 && h <= 24) fields.end_hour = h;
+      else { const e = new Error('Invalid end_hour'); e.statusCode = 400; throw e; }
+    }
+    if (typeof body.is_active !== 'undefined') fields.is_active = !!body.is_active;
+
+    await configRepository.updateSlot(id, fields, req.user.username);
     await configRepository.insertAuditLog({
       entity_type: 'SLOT', entity_id: id, action: 'SLOT_UPDATE',
       actor: req.user.username, payload: req.body,

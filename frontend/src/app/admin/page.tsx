@@ -266,14 +266,22 @@ export default function AdminPage() {
           <p className="text-sm text-stake-text">Budget is shared across ALL players per slot window. The risk engine tightens mines automatically as budget is consumed.</p>
           {budgetStatus.map((slot: any) => {
             const isEditing = editingSlot === slot.id;
+            // Safe numeric coercions and fallbacks
+            const startHour = (slot && slot.start_hour !== undefined && slot.start_hour !== null) ? slot.start_hour : null;
+            const endHour = (slot && slot.end_hour !== undefined && slot.end_hour !== null) ? slot.end_hour : null;
+            const configuredBudgetPaise = Number(slot.configured_budget_paise || slot.total_budget_paise || 0);
+            const totalBudgetPaise = Number(slot.total_budget_paise || configuredBudgetPaise || 0);
+            const spentPaise = Number(slot.spent_paise || 0);
+            const remainingPaise = Number(slot.remaining_paise ?? (totalBudgetPaise - spentPaise));
+            const spentPct = Number.isFinite(Number(slot.spent_pct)) ? Number(slot.spent_pct) : (totalBudgetPaise > 0 ? Math.round((spentPaise / totalBudgetPaise) * 100 * 100) / 100 : 0);
             return (
               <div key={slot.id} className="panel p-5">
                 <div className="flex items-center justify-between mb-3">
                   <div>
-                    <p className="font-display font-bold text-white text-lg">{slot.slot_name}</p>
-                    <p className="text-xs text-stake-text">{String(slot.start_hour).padStart(2,'0')}:00 – {String(slot.end_hour).padStart(2,'0')}:00 · {slot.is_active ? <span className="text-stake-accent">Active</span> : <span className="text-rose-400">Inactive</span>}</p>
+                    <p className="font-display font-bold text-white text-lg">{slot.slot_name || 'Slot'}</p>
+                    <p className="text-xs text-stake-text">{startHour !== null ? String(startHour).padStart(2,'0') + ':00' : '--:--'} · {endHour !== null ? String(endHour).padStart(2,'0') + ':00' : '--:--'} · {slot.is_active ? <span className="text-stake-accent">Active</span> : <span className="text-rose-400">Inactive</span>}</p>
                   </div>
-                  <button onClick={() => { setEditingSlot(isEditing ? null : slot.id); setEditSlot({ budget_paise: slot.budget_paise, slot_name: slot.slot_name, is_active: slot.is_active }); }}
+                  <button onClick={() => { setEditingSlot(isEditing ? null : slot.id); setEditSlot({ budget_paise: slot.configured_budget_paise ?? slot.total_budget_paise ?? 0, slot_name: slot.slot_name, is_active: slot.is_active }); }}
                     className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-white hover:bg-white/10 transition flex items-center gap-1">
                     {isEditing ? <><ChevronUp className="h-3.5 w-3.5"/> Cancel</> : <><ChevronDown className="h-3.5 w-3.5"/> Edit</>}
                   </button>
@@ -282,18 +290,18 @@ export default function AdminPage() {
                 {/* Budget bar */}
                 <div className="mb-3">
                   <div className="flex justify-between text-xs mb-1">
-                    <span className="text-stake-text">Budget used: <span className="font-bold text-white">{slot.spent_pct}%</span></span>
-                    <span className="text-stake-text">₹{(slot.spent_paise/100).toFixed(0)} / ₹{(slot.total_budget_paise/100).toFixed(0)}</span>
+                    <span className="text-stake-text">Budget used: <span className="font-bold text-white">{spentPct}%</span></span>
+                    <span className="text-stake-text">₹{(spentPaise/100).toFixed(0)} / ₹{(totalBudgetPaise/100).toFixed(0)}</span>
                   </div>
                   <div className="h-2.5 rounded-full bg-white/5 overflow-hidden">
-                    <div className={`h-full rounded-full transition-all ${slot.spent_pct >= 90 ? 'bg-rose-500' : slot.spent_pct >= 70 ? 'bg-amber-400' : 'bg-stake-accent'}`}
-                      style={{ width: `${slot.spent_pct}%` }}/>
+                    <div className={`h-full rounded-full transition-all ${spentPct >= 90 ? 'bg-rose-500' : spentPct >= 70 ? 'bg-amber-400' : 'bg-stake-accent'}`}
+                      style={{ width: `${spentPct}%` }}/>
                   </div>
                   <p className="mt-1 text-xs text-stake-text">
-                    Remaining: <span className="font-bold text-stake-gold">₹{(slot.remaining_paise/100).toFixed(0)}</span>
-                    {' · '}{slot.game_count} games today
-                    {slot.spent_pct >= 90 && <span className="ml-2 text-rose-400 font-bold">⚠ CRITICAL — mines auto-tightened</span>}
-                    {slot.spent_pct >= 70 && slot.spent_pct < 90 && <span className="ml-2 text-amber-400 font-bold">⚠ HIGH — mines tightened</span>}
+                    Remaining: <span className="font-bold text-stake-gold">₹{(remainingPaise/100).toFixed(0)}</span>
+                    {' · '}{slot.game_count || 0} games today
+                    {spentPct >= 90 && <span className="ml-2 text-rose-400 font-bold">⚠ CRITICAL — mines auto-tightened</span>}
+                    {spentPct >= 70 && spentPct < 90 && <span className="ml-2 text-amber-400 font-bold">⚠ HIGH — mines tightened</span>}
                   </p>
                 </div>
 
@@ -306,7 +314,7 @@ export default function AdminPage() {
                       </div>
                       <div>
                         <label className="label-caps mb-1 block">Daily Budget (₹)</label>
-                        <input type="number" className="input-field !py-2 text-sm" value={(editSlot.budget_paise||0)/100} onChange={e => setEditSlot((s:any) => ({...s, budget_paise: Math.round(parseFloat(e.target.value)*100)}))}/>
+                        <input type="number" className="input-field !py-2 text-sm" value={(editSlot.budget_paise||configuredBudgetPaise)/100} onChange={e => setEditSlot((s:any) => ({...s, budget_paise: Math.round(parseFloat(e.target.value)*100)}))}/>
                       </div>
                     </div>
                     <div className="flex items-center gap-3">

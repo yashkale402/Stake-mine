@@ -229,13 +229,21 @@ async function getLatestAuditLogForActorAction(actor, action) {
 async function getSlotBudgetStatus() {
   const [rows] = await pool.query(
     `SELECT
-       sc.id          AS slot_id,
+       sc.id         AS id,
        sc.slot_name,
+       sc.start_hour,
+       sc.end_hour,
+       sc.is_active,
        sc.budget_paise AS configured_budget_paise,
        COALESCE(sbl.total_budget_paise, sc.budget_paise) AS total_budget_paise,
        COALESCE(sbl.spent_paise, 0)                      AS spent_paise,
        COALESCE(sbl.game_count, 0)                       AS game_count,
-       COALESCE(sbl.slot_date, CURDATE())                AS slot_date
+       COALESCE(sbl.slot_date, CURDATE())                AS slot_date,
+       -- Derived fields
+       (COALESCE(sbl.total_budget_paise, sc.budget_paise) - COALESCE(sbl.spent_paise, 0)) AS remaining_paise,
+       CASE WHEN COALESCE(sbl.total_budget_paise, sc.budget_paise) > 0
+            THEN ROUND((COALESCE(sbl.spent_paise, 0) / COALESCE(sbl.total_budget_paise, sc.budget_paise)) * 100, 2)
+            ELSE 0 END AS spent_pct
      FROM slot_configs sc
      LEFT JOIN slot_budget_ledger sbl
        ON sbl.slot_id = sc.id AND sbl.slot_date = CURDATE()
