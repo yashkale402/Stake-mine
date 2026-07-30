@@ -70,18 +70,22 @@ async function createGame(data, connection = null) {
       if (!ledgerRow) return gameRow;
       const totalBudget = Number(ledgerRow.total_budget_paise || 0);
       const spent = Number(ledgerRow.spent_paise || 0);
-      const reserved = await require('./budget.repository').getActiveReservedSum(gameRow.slot_ledger_id, connection || null);
+      const reserved = await budgetRepository.getActiveReservedSum(gameRow.slot_ledger_id, connection || null);
       const remaining = Math.max(0, totalBudget - spent - reserved);
 
       const potentialPayout = Math.floor(bet_amount_paise * configuredMaxMultiplier);
       const reserveAmount = Math.min(potentialPayout, Math.floor(remaining * 0.9));
 
-      await budgetService.reserveBudgetForGame({
+      try {
+        await budgetService.reserveBudgetForGame({
           gameUuid: game_uuid,
           userId: user_id,
           slotLedgerId: gameRow.slot_ledger_id,
           requestedPayoutPaise: reserveAmount,
-      }, connection || null);
+        }, connection || null);
+      } catch (err) {
+        console.warn(`[Budget] reservation failed for game ${game_uuid}: ${err.message}`);
+      }
     }
   } catch (err) {
     throw err;
@@ -439,6 +443,15 @@ async function getLeaderboard(limit = 10) {
   return rows;
 }
 
+async function countActiveGamesByLedgerId(ledgerId) {
+  const [rows] = await pool.query(
+    `SELECT COUNT(*) AS total FROM game_sessions
+     WHERE slot_ledger_id = ? AND status = 'ACTIVE'`,
+    [ledgerId]
+  );
+  return Number(rows[0]?.total || 0);
+}
+
 async function getAdminKpis() {
   const [[financials], [retention], [churn]] = await Promise.all([
     pool.query(
@@ -525,6 +538,7 @@ module.exports = {
   getConsecutiveLosses,
   countHistory,
   getAdminGameMetrics,
+  countActiveGamesByLedgerId,
   getPlayerSummaryStats,
   getLeaderboard,
   getAdminKpis,

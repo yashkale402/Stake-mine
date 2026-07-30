@@ -79,6 +79,25 @@ Notes & next steps
   - Extract a one-page design doc for fairness & audits.
   - Draft environment variable docs and local dev checklist.
 
+Admin Global Config Page
+------------------------
+The admin dashboard includes a polished Global Config page for runtime tuning without code changes.
+
+- **Grouped settings**: configuration categories are separated into Game, Bet, Budget, and Performance sections.
+- **Searchable fields**: filter settings by label, key, or help text in real time.
+- **Section cards**: modern rounded cards with subtle shadows and hover transitions.
+- **Friendly labels**: backend config keys are displayed with admin-friendly names while keeping the original key visible in a muted label.
+- **Inline editing**: edit values directly, with draft changes highlighted and modified fields clearly marked.
+- **Save / Discard workflow**: each section can be saved independently, and discard removes unsaved changes.
+- **Validation checks**: the UI warns about invalid configurations before saving (e.g. min/max bet, board size vs mines, risk thresholds order, cache TTL).
+- **Responsive layout**: two-column card layout on desktop and tablet, collapses cleanly to a single column on mobile.
+- **Accessibility**: keyboard-friendly controls, visible focus states, ARIA labels, and high contrast text.
+- **Feedback**: loading skeletons appear while fetching, and save actions show in-progress feedback.
+
+Screenshots
+-----------
+![Global Config dashboard screenshot](./frontend/public/placeholder-config-screenshot.png)
+
 Algorithms & internals (brief)
 ------------------------------
 This section briefly explains the main algorithms the system uses and where to find their implementation.

@@ -38,12 +38,12 @@ async function findReservationByGameUuid(gameUuid, connection = null) {
 
 async function settleReservationByGameUuid(gameUuid, amountPaise, connection = null) {
   const db = connection || pool;
-  // Mark reservation as SETTLED and record settled_at
+  // Mark reservation as SETTLED and record settled_at. Preserve the original reserved amount.
   await db.query(
     `UPDATE budget_reservations
-     SET status = 'SETTLED', settled_at = NOW(), reserved_paise = ?
+     SET status = 'SETTLED', settled_at = NOW()
      WHERE game_uuid = ? AND status = 'ACTIVE'`,
-    [amountPaise, gameUuid]
+    [gameUuid]
   );
 }
 

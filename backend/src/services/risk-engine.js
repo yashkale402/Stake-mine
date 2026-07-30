@@ -38,11 +38,16 @@ function getRiskLevel(budgetUsagePct, thresholds = DEFAULT_THRESHOLDS) {
 
 function getRiskAdjustments(level) {
   switch (level) {
-    case RISK_LEVELS.LOW: return { mineDelta: 1, edgeDelta: 0.01, multiplierCapFactor: 0.90 };
-    case RISK_LEVELS.MEDIUM: return { mineDelta: 1, edgeDelta: 0.03, multiplierCapFactor: 0.72 };
-    case RISK_LEVELS.HIGH: return { mineDelta: 2, edgeDelta: 0.06, multiplierCapFactor: 0.55 };
-    case RISK_LEVELS.CRITICAL: return { mineDelta: 3, edgeDelta: 0.10, multiplierCapFactor: 0.40 };
-    default: return { mineDelta: 0, edgeDelta: 0, multiplierCapFactor: 1 };
+    case RISK_LEVELS.LOW:
+      return { mineDelta: 1, edgeDelta: 0.01, multiplierCapFactor: 0.95 };
+    case RISK_LEVELS.MEDIUM:
+      return { mineDelta: 2, edgeDelta: 0.03, multiplierCapFactor: 0.78 };
+    case RISK_LEVELS.HIGH:
+      return { mineDelta: 3, edgeDelta: 0.06, multiplierCapFactor: 0.60 };
+    case RISK_LEVELS.CRITICAL:
+      return { mineDelta: 4, edgeDelta: 0.10, multiplierCapFactor: 0.45 };
+    default:
+      return { mineDelta: 0, edgeDelta: 0, multiplierCapFactor: 1 };
   }
 }
 
@@ -58,7 +63,8 @@ function computeRiskProfile({
   const usedBudget = Math.max(0, Number(spentPaise) || 0);
   const reservedBudget = Math.max(0, Number(reservedPaise) || 0);
   const budgetUsagePct = dailyBudget > 0 ? (usedBudget / dailyBudget) * 100 : 0;
-  const level = getRiskLevel(budgetUsagePct, thresholds);
+  const effectiveUsagePct = dailyBudget > 0 ? ((usedBudget + reservedBudget) / dailyBudget) * 100 : 0;
+  const level = getRiskLevel(effectiveUsagePct, thresholds);
   const adjustment = getRiskAdjustments(level);
   const maxMines = Math.max(1, boardSize - 1); // always leave at least one possible safe cell
 
@@ -73,6 +79,7 @@ function computeRiskProfile({
     reservedBudget,
     remainingBudget: Math.max(0, dailyBudget - usedBudget - reservedBudget),
     budgetUsagePct: Math.round(budgetUsagePct * 100) / 100,
+    effectiveUsagePct: Math.round(effectiveUsagePct * 100) / 100,
     protectionStatus: level === RISK_LEVELS.NORMAL ? 'INACTIVE' : 'ACTIVE',
   };
 }

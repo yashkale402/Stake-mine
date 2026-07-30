@@ -36,3 +36,13 @@ test('risk progressively limits payout exposure without changing normal mode', (
   assert.ok(high.houseEdge > normal.houseEdge);
   assert.ok(high.multiplierCapFactor < normal.multiplierCapFactor);
 });
+
+test('reserved budget contributes to effective risk pressure', () => {
+  const base = computeRiskProfile({
+    requestedMines: 3, boardSize: 25, baseHouseEdge: 0.05,
+    totalBudgetPaise: 10000, spentPaise: 4000, reservedPaise: 1500, thresholds,
+  });
+  assert.equal(base.level, 'LOW');
+  assert.equal(base.budgetUsagePct, 40);
+  assert.equal(base.effectiveUsagePct, 55);
+});

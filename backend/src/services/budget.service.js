@@ -3,6 +3,7 @@
 const { v4: uuidv4 } = require('uuid');
 const budgetRepository = require('../repositories/budget.repository');
 const configRepository = require('../repositories/config.repository');
+const gameRepository = require('../repositories/game.repository');
 const { normalizeThresholds, getRiskLevel } = require('./risk-engine');
 
 function thresholdsFromConfig(config = {}) {
@@ -41,29 +42,48 @@ async function getRiskDashboard() {
   return Promise.all(slots.map(async (slot) => {
     const dailyBudget = Number(slot.total_budget_paise || 0);
     const usedBudget = Number(slot.spent_paise || 0);
+    const reservedBudget = Number(slot.reserved_paise || 0);
     const budgetUsagePct = dailyBudget > 0 ? Math.round((usedBudget / dailyBudget) * 10000) / 100 : 0;
-    const currentRiskLevel = getRiskLevel(budgetUsagePct, thresholds);
+    const effectiveUsagePct = dailyBudget > 0 ? Math.round(((usedBudget + reservedBudget) / dailyBudget) * 10000) / 100 : 0;
+    const currentRiskLevel = getRiskLevel(effectiveUsagePct, thresholds);
     await recordRiskLevelTransition({
-      slotId: slot.slot_id,
+      slotId: slot.id,
       riskLevel: currentRiskLevel,
-      budgetUsagePct,
+      budgetUsagePct: effectiveUsagePct,
       reason: 'BUDGET_STATUS_RECALCULATION',
     });
-    const lastChange = await configRepository.getLatestRiskLevelAudit(slot.slot_id);
+    const lastChange = await configRepository.getLatestRiskLevelAudit(slot.id);
     let activeSince = null;
     try {
       const payload = lastChange?.payload ? JSON.parse(lastChange.payload) : null;
       activeSince = payload?.newLevel === currentRiskLevel ? lastChange.created_at : null;
     } catch { activeSince = null; }
+    const activeGamesCount = slot.ledger_id ? await gameRepository.countActiveGamesByLedgerId(slot.ledger_id) : 0;
+    const nextResetSeconds = (() => {
+      const now = new Date();
+      const nextMidnight = new Date(now);
+      nextMidnight.setHours(24, 0, 0, 0);
+      return Math.max(0, Math.round((nextMidnight - now) / 1000));
+    })();
+    const currentRtpTarget = config.rtp_target || null;
     return {
-      ...slot, id: slot.slot_id,
-      daily_budget_paise: dailyBudget, used_budget_paise: usedBudget,
-      remaining_paise: Math.max(0, dailyBudget - usedBudget),
-      spent_pct: budgetUsagePct, budget_usage_pct: budgetUsagePct,
+      ...slot,
+      slot_id: slot.id,
+      daily_budget_paise: dailyBudget,
+      used_budget_paise: usedBudget,
+      reserved_paise: reservedBudget,
+      remaining_paise: Math.max(0, dailyBudget - usedBudget - reservedBudget),
+      spent_pct: budgetUsagePct,
+      budget_usage_pct: budgetUsagePct,
+      effective_usage_pct: effectiveUsagePct,
       current_risk_level: currentRiskLevel,
       protection_status: currentRiskLevel === 'NORMAL' ? 'INACTIVE' : 'ACTIVE',
       last_risk_level_change: lastChange?.created_at || null,
       active_since: activeSince || lastChange?.created_at || null,
+      active_games_count: activeGamesCount,
+      current_rtp_target: currentRtpTarget,
+      current_protection_badge: currentRiskLevel === 'NORMAL' ? '🟢 Normal' : currentRiskLevel === 'LOW' ? '🟡 Low Risk' : currentRiskLevel === 'MEDIUM' ? '🟠 Medium Risk' : currentRiskLevel === 'HIGH' ? '🔴 High Risk' : '⚫ Critical Protection',
+      next_reset_seconds: nextResetSeconds,
     };
   }));
 }

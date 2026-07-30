@@ -38,6 +38,7 @@ async function quotePayout({ userId, betPaise, mineCount, boardSize, slotLedgerI
   const remaining = Math.max(0, totalBudget - spent - reserved);
 
   const budgetUsagePct = totalBudget > 0 ? (spent / totalBudget) * 100 : 0;
+  const effectiveUsagePct = totalBudget > 0 ? ((spent + reserved) / totalBudget) * 100 : 0;
   const thresholds = normalizeThresholds({
     normal: normalCfg ? JSON.parse(normalCfg.config_value) : 50,
     low: lowCfg ? JSON.parse(lowCfg.config_value) : 75,
@@ -45,7 +46,7 @@ async function quotePayout({ userId, betPaise, mineCount, boardSize, slotLedgerI
     high: highCfg ? JSON.parse(highCfg.config_value) : 100,
     critical: criticalCfg ? JSON.parse(criticalCfg.config_value) : 100,
   });
-  const riskLevel = getRiskLevel(budgetUsagePct, thresholds);
+  const riskLevel = getRiskLevel(effectiveUsagePct, thresholds);
 
   // Player profile adjustments
   const profile = await playerProfileService.getPlayerProfile(userId);
@@ -67,7 +68,7 @@ async function quotePayout({ userId, betPaise, mineCount, boardSize, slotLedgerI
   const allowedByBudget = Math.floor(remaining * 0.9); // hold 10% buffer
   const maxAllowedPayout = Math.min(potentialPayout, allowedByBudget, maxExposure);
 
-  return { maxAllowedPayout, maxMultiplier, riskLevel, remaining, totalBudget, budgetUsagePct };
+  return { maxAllowedPayout, maxMultiplier, riskLevel, remaining, totalBudget, budgetUsagePct, effectiveUsagePct };
 }
 
 module.exports = { quotePayout };

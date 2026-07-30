@@ -180,8 +180,12 @@ async function _loadSlotAndBudget() {
       spentPaise:       ledger.spent_paise,
       gameCount:        ledger.game_count,
     };
-    await cacheRepository.setBudgetState(slot.id, slotDate, budgetState);
   }
+
+  const reservedPaise = await budgetRepository.getActiveReservedSum(budgetState.ledgerId);
+  budgetState.reservedPaise = reservedPaise;
+  budgetState.remainingPaise = Math.max(0, budgetState.totalBudgetPaise - budgetState.spentPaise - reservedPaise);
+  await cacheRepository.setBudgetState(slot.id, slotDate, budgetState);
 
   return { slot, ledger: budgetState };
 }
@@ -300,6 +304,7 @@ async function startGame(userId, betAmountPaise, mineCount) {
     baseHouseEdge:        houseEdge,
     totalBudgetPaise:     budgetState?.totalBudgetPaise || 1,
     spentPaise:           budgetState?.spentPaise || 0,
+    reservedPaise:        budgetState?.reservedPaise || 0,
     playerTotalGames:     Number(playerStats?.total_games || 0),
     playerNetProfitPaise: Number(playerStats?.net_profit_paise || 0),
     playerSessionLosses:  sessionLosses,
