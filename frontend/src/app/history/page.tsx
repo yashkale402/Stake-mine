@@ -4,7 +4,8 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/useAuthStore';
 import api from '@/lib/api';
-import { History as HistoryIcon, ArrowUpRight, ArrowDownRight, RefreshCw } from 'lucide-react';
+import { ArrowUpRight, ArrowDownRight, RefreshCw, Target, Trophy, WalletCards } from 'lucide-react';
+import { motion } from 'framer-motion';
 
 interface HistoryRecord {
   game_uuid: string;
@@ -74,12 +75,41 @@ export default function HistoryPage() {
 
   if (!isAuthenticated) return null;
 
+  const totalProfit = history.reduce((total, item) => total + item.profit_loss_paise, 0);
+  const bestMultiplier = history.reduce((best, item) => Math.max(best, Number(item.final_multiplier) || 0), 0);
+  const cashouts = history.filter((item) => item.outcome === 'CASHOUT' || item.outcome === 'WIN').length;
+
   return (
     <div className="mx-auto max-w-5xl animate-float-in py-2">
-      <div className="mb-6 flex items-center justify-between gap-3">
+      <div className="history-hero mb-5 overflow-hidden rounded-[26px] border border-white/[0.07] px-5 py-6 sm:px-7">
+        <div className="relative flex items-center justify-between gap-3">
+          <div>
+            <p className="label-caps mb-1 text-stake-accent">Player archive</p>
+            <h1 className="font-display text-3xl font-extrabold text-white">Your game story.</h1>
+            <p className="mt-1 text-sm text-stake-text">Every round, payout, and personal best in one place.</p>
+          </div>
+          <div className="hidden h-14 w-14 items-center justify-center rounded-2xl border border-stake-gold/20 bg-stake-gold/10 text-stake-gold sm:flex"><Trophy className="h-7 w-7" /></div>
+        </div>
+      </div>
+
+      <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {[
+          { label: 'Rounds shown', value: history.length, icon: Target, tone: 'text-stake-accent' },
+          { label: 'Cashouts', value: cashouts, icon: Trophy, tone: 'text-stake-gold' },
+          { label: 'Best multiplier', value: `${bestMultiplier.toFixed(2)}×`, icon: ArrowUpRight, tone: 'text-sky-300' },
+          { label: 'Net result', value: `₹${(totalProfit / 100).toFixed(2)}`, icon: WalletCards, tone: totalProfit >= 0 ? 'text-stake-accent' : 'text-rose-400' },
+        ].map(({ label, value, icon: Icon, tone }, index) => (
+          <motion.div key={label} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.05 }} className="history-stat rounded-2xl border border-white/[0.06] p-4">
+            <div className="mb-3 flex items-center justify-between"><span className="label-caps !text-[9px]">{label}</span><Icon className={`h-4 w-4 ${tone}`} /></div>
+            <p className={`font-display text-xl font-extrabold ${tone}`}>{value}</p>
+          </motion.div>
+        ))}
+      </div>
+
+      <div className="mb-5 flex items-center justify-between gap-3">
         <div>
-          <p className="label-caps mb-1 text-stake-accent">Records</p>
-          <h1 className="font-display text-2xl font-extrabold text-white">Game History</h1>
+          <p className="label-caps mb-1 text-stake-accent">Round details</p>
+          <h2 className="font-display text-xl font-extrabold text-white">Game history</h2>
         </div>
         <button
           type="button"
@@ -101,7 +131,7 @@ export default function HistoryPage() {
           No games yet. Head to the board and place your first bet.
         </div>
       ) : (
-        <div className="panel overflow-hidden">
+          <div className="panel history-table overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full border-collapse text-left">
               <thead>
