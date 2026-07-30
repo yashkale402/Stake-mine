@@ -201,3 +201,39 @@ ON DUPLICATE KEY UPDATE
   password_hash = VALUES(password_hash),
   role = VALUES(role),
   status = VALUES(status);
+
+-- ── 9. BUDGET RESERVATIONS ─────────────────────────────────────────────────
+-- Tracks per-game reservations against a slot ledger. Reservations are created
+-- when a game starts to protect the slot budget and released/settled when the
+-- game finishes.
+CREATE TABLE IF NOT EXISTS budget_reservations (
+    id                  BIGINT          AUTO_INCREMENT PRIMARY KEY,
+    reservation_uuid    CHAR(36)        NOT NULL UNIQUE,
+    game_uuid           CHAR(36)        NOT NULL,
+    user_id             INT             NOT NULL,
+    slot_ledger_id      BIGINT          NOT NULL,
+    reserved_paise      BIGINT          NOT NULL,
+    status              ENUM('ACTIVE','RELEASED','SETTLED') NOT NULL DEFAULT 'ACTIVE',
+    created_at          TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    settled_at          TIMESTAMP       NULL,
+
+    INDEX idx_slot_ledger (slot_ledger_id),
+    INDEX idx_game_uuid   (game_uuid),
+    CONSTRAINT fk_reservation_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT fk_reservation_ledger FOREIGN KEY (slot_ledger_id) REFERENCES slot_budget_ledger(id) ON DELETE CASCADE
+);
+
+-- ── 10. BUDGET HISTORY ─────────────────────────────────────────────────────
+-- Auditable ledger of reservations, settlements, releases and recoveries.
+CREATE TABLE IF NOT EXISTS budget_history (
+    id                  BIGINT          AUTO_INCREMENT PRIMARY KEY,
+    slot_ledger_id      BIGINT          NOT NULL,
+    change_type         ENUM('RESERVATION','SETTLEMENT','RELEASE','RECOVERY') NOT NULL,
+    amount_paise        BIGINT          NOT NULL,
+    reason              VARCHAR(255),
+    related_uuid        CHAR(36),
+    created_at          TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    INDEX idx_history_slot (slot_ledger_id),
+    CONSTRAINT fk_history_ledger FOREIGN KEY (slot_ledger_id) REFERENCES slot_budget_ledger(id) ON DELETE CASCADE
+);

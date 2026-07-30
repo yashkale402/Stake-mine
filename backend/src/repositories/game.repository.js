@@ -13,6 +13,9 @@
 'use strict';
 
 const { pool } = require('../config/mysql');
+const budgetRepository = require('./budget.repository');
+const configRepository = require('./config.repository');
+const budgetService = require('../services/budget.service');
 
 /**
  * Insert a new game session record (status = ACTIVE).
@@ -53,7 +56,39 @@ async function createGame(data, connection = null) {
     ]
   );
 
-  return findGameById(result.insertId, db);
+  // Load inserted row
+  const gameRow = await findGameById(result.insertId, db);
+
+  // Attempt conservative reservation for this game inside the same transaction
+  try {
+    if (gameRow && gameRow.slot_ledger_id) {
+      // Conservative reservation: min(bet * max_multiplier, remaining_budget * 0.9)
+      const maxMultCfg = await configRepository.getGlobalConfig('maximum_multiplier');
+      const configuredMaxMultiplier = maxMultCfg ? Number(JSON.parse(maxMultCfg.config_value)) : 100;
+
+      const ledgerRow = await configRepository.getOrCreateBudgetLedger(gameRow.slot_ledger_id, new Date().toISOString().split('T')[0], 0);
+      const totalBudget = Number(ledgerRow.total_budget_paise || 0);
+      const spent = Number(ledgerRow.spent_paise || 0);
+      const reserved = await require('./budget.repository').getActiveReservedSum(gameRow.slot_ledger_id, connection || null);
+      const remaining = Math.max(0, totalBudget - spent - reserved);
+
+      const potentialPayout = Math.floor(bet_amount_paise * configuredMaxMultiplier);
+      const reserveAmount = Math.min(potentialPayout, Math.floor(remaining * 0.9));
+
+      if (reserveAmount > 0) {
+        await budgetService.reserveBudgetForGame({
+          gameUuid: game_uuid,
+          userId: user_id,
+          slotLedgerId: gameRow.slot_ledger_id,
+          requestedPayoutPaise: reserveAmount,
+        }, connection || null);
+      }
+    }
+  } catch (err) {
+    throw err;
+  }
+
+  return gameRow;
 }
 
 /**
@@ -146,6 +181,14 @@ async function settleGameCashout(gameUuid, payoutPaise, finalMultiplier, connect
      WHERE game_uuid = ? AND status = 'ACTIVE'`,
     [payoutPaise, finalMultiplier, gameUuid]
   );
+
+  // Also settle any reservation for this game (if present)
+  try {
+    await budgetService.settleReservationOnCashout(gameUuid, payoutPaise, connection || null);
+  } catch (err) {
+    console.error('[Budget] failed to mark reservation settled:', err.message);
+  }
+
   return result.affectedRows;
 }
 
@@ -166,6 +209,14 @@ async function settleGameLost(gameUuid, connection = null) {
      WHERE game_uuid = ? AND status = 'ACTIVE'`,
     [gameUuid]
   );
+
+  // Release any reservation associated with this game
+  try {
+    await budgetService.releaseReservationOnLoss(gameUuid, connection || null);
+  } catch (err) {
+    console.error('[Budget] failed to release reservation:', err.message);
+  }
+
   return result.affectedRows;
 }
 
