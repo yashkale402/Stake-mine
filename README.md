@@ -1,203 +1,285 @@
 # Stake Mine
 
-Brief summary
----------------
-Stake Mine is a two-tier web application: a Node.js backend that implements a cryptographically-secure "mine" betting game, and a Next.js frontend that provides the player UI. The system uses MySQL as the source of truth and Redis as a caching/coordination layer. The repo is containerised with `docker-compose.yml` for easy local/dev runs.
+Stake Mine is a full-stack mines-style betting game with a production-style backend and modern React frontend. The app uses MySQL as the source of truth and Redis for low-latency state, caching, and coordination.
 
-**Key components**
-- **Backend**: [backend/](backend/) — Express app with controllers, services, repositories, Redis cache, MySQL persistence.
-- **Frontend**: [frontend/](frontend/) — Next.js app communicating with backend APIs.
-- **Database**: [mysql/init.sql](mysql/init.sql) — schema and initial data.
-- **Orchestration**: `docker-compose.yml` — compose for backend, frontend, MySQL, Redis (dev convenience).
+## Project overview
 
-How it works (high level)
--------------------------
-- Player actions originate from the frontend which calls REST API endpoints on the backend.
-- Controllers validate requests and call Service layer functions (e.g. game lifecycle in `backend/src/services/game.service.js`).
-- Services coordinate domain logic, call Repositories for DB access, and use CacheRepository for Redis operations.
-- MySQL stores canonical records (games, history, users). Redis stores active game state, idempotency keys and distributed locks to improve latency and ensure safe concurrency.
+- **Backend**: `backend/` — Express app with layered controllers, services, repositories, Redis cache, and MySQL persistence.
+- **Frontend**: `frontend/` — Next.js app with gameplay UI, auth, and admin dashboard.
+- **Database schema**: `mysql/init.sql` — schema and seeded structure for users, games, budgets, and audit history.
+- **Local dev orchestration**: `docker-compose.yml` — builds backend, frontend, MySQL, Redis, phpMyAdmin, and RedisInsight.
 
-Core algorithms (brief)
-----------------------
-- **Mine generation (CSPRNG + partial Fisher–Yates)**
-  - Implemented in `backend/src/services/game.service.js` via a cryptographically-secure partial Fisher–Yates shuffle to produce `mine_positions` at game start. Mines are generated once per game and are immutable for that game's lifetime.
-- **Multiplier calculation (actuarial probability)**
-  - The visible multiplier is computed from the probability of revealing only safe cells so far, adjusted by a configured house edge. Implemented as an incremental product to avoid factorials (see `computeMultiplier` in `game.service.js`).
-- **Risk engine**
-  - `backend/src/services/risk-engine.js` adjusts `mineCount` and `houseEdge` based on slot budget usage, player lifecycle (new player protection), and session loss streaks. This feeds into mine generation to balance payouts vs budget.
+## What this repo contains
 
-Important data flows
---------------------
-- Start Game: frontend -> controller -> `startGame()` service →
-  - validate, compute risk profile, generate `mine_positions` (CSPRNG), debit player (MySQL TX), create game row, cache full game state in Redis, set active-game pointer.
-- Reveal Cell: frontend -> controller -> `revealCell()` service →
-  - load state (Redis primary, MySQL fallback), idempotency check (Redis), check membership in pre-generated `mine_positions`, then either handle safe reveal (update multiplier, persist reveal state) or handle mine hit (settle loss in MySQL transaction, clear Redis).
-- Cashout: frontend -> controller -> `cashout()` service →
-  - acquire Redis cashout lock, recompute payout from cached multiplier, perform MySQL transaction to credit wallet and mark game settled, insert history, update slot budget ledger, clear Redis state, release lock.
+- `backend/`
+  - Express REST API and Socket.IO auth
+  - Game lifecycle: start game, reveal tile, cashout, settle loss/expiry
+  - Budget reservations and per-slot budget tracking
+  - Redis cache and distributed locks
+  - MySQL persistence for wallets, sessions, history, and budget ledgers
+- `frontend/`
+  - Next.js 14 App Router frontend
+  - Player experience screens: login, game board, history
+  - Admin dashboard with runtime config and KPI views
+- `mysql/init.sql`
+  - MySQL schema for all production tables and developer setup
+- `docker-compose.yml`
+  - Local stack wiring for backend, frontend, MySQL, Redis, phpMyAdmin, and RedisInsight
 
-Concurrency & consistency
--------------------------
-- Redis is used for low-latency active state and coordination (locks, idempotency, active-game pointer).
-- MySQL is the single source of truth; critical money actions (debit/credit, final settlement) happen inside MySQL transactions to ensure atomicity.
-- Cashouts use a distributed lock (Redis SET NX) plus conditional MySQL UPDATE (WHERE status='ACTIVE') to prevent double-settlement.
-- Reveal idempotency keys stored in Redis prevent duplicate processing when clients retry.
+## Key capabilities
 
-Caching strategy and fallbacks
------------------------------
-- Active game state and budget ledgers are cached in Redis with TTLs. On Redis miss the services recover from MySQL and repopulate the cache.
-- Redis failures are logged but intentionally do not crash the game flow — MySQL fallbacks ensure correctness.
+- Gameplay with safe tile reveals, mine detection, and cashout.
+- Risk-aware quote generation and payout capping.
+- Budget-aware slot reservation system to keep per-slot exposure controllable.
+- Redis-backed active game state, idempotency protection, and transaction locks.
+- JWT authentication with player/admin roles.
+- Local development via Docker Compose.
 
-Files to inspect for the implementation details
-----------------------------------------------
-- Game lifecycle & algorithms: [backend/src/services/game.service.js](backend/src/services/game.service.js)
-- Risk engine: [backend/src/services/risk-engine.js](backend/src/services/risk-engine.js)
-- Redis access / locking / idempotency: [backend/src/repositories/cache.repository.js](backend/src/repositories/cache.repository.js)
-- Repositories (DB access): [backend/src/repositories/](backend/src/repositories/)
-- Frontend API client: [frontend/src/lib/api.ts](frontend/src/lib/api.ts)
-- Docker compose: [docker-compose.yml](docker-compose.yml)
+## Tech stack
 
-Quickstart (dev)
----------------
-1. Start services:
+### Backend
+- Node.js 20+
+- Express
+- MySQL 8
+- Redis 7
+- JSON Web Tokens
+- Winston logging
+- Socket.IO for real-time user room handling
+
+### Frontend
+- Next.js 14 App Router
+- React 18
+- TypeScript
+- Tailwind CSS
+- Framer Motion
+- Zustand state management
+- Axios HTTP client
+- Socket.IO client
+
+### Dev tooling / Infra
+- Docker Compose
+- phpMyAdmin for DB inspection
+- RedisInsight for Redis inspection
+
+## Folder structure
+
+```text
+Stake-mine/
+├── backend/
+│   ├── Dockerfile
+│   ├── package.json
+│   ├── src/
+│   │   ├── app.js
+│   │   ├── server.js
+│   │   ├── config/
+│   │   ├── controllers/
+│   │   ├── middleware/
+│   │   ├── models/
+│   │   ├── repositories/
+│   │   ├── routes/
+│   │   ├── services/
+│   │   └── utils/
+├── frontend/
+│   ├── Dockerfile
+│   ├── package.json
+│   ├── src/
+│   │   ├── app/
+│   │   ├── components/
+│   │   ├── lib/
+│   │   └── store/
+├── mysql/
+│   └── init.sql
+├── docker-compose.yml
+└── README.md
+```
+
+## Local development
+
+### Requirements
+- Docker Desktop
+- `docker compose`
+- Node.js 20+ for local npm commands
+
+### Start the full stack
 
 ```powershell
 docker compose up -d
 ```
 
-2. Backend logs and tests:
+This starts:
+- `http://localhost:3000` — frontend
+- `http://localhost:3001` — backend API
+- `http://localhost:8080` — phpMyAdmin
+- `http://localhost:6379` — Redis
+- `http://localhost:5540` — RedisInsight
+
+### Backend dev flow
 
 ```powershell
 cd backend
 npm install
 npm test
+npm run dev
 ```
 
-Notes & next steps
-------------------
-- This README is a concise summary. If you want, I can:
-  - Add sequence diagrams (Mermaid) for start/reveal/cashout.
-  - Extract a one-page design doc for fairness & audits.
-  - Draft environment variable docs and local dev checklist.
+The backend entrypoint is `backend/src/server.js`.
 
-Admin Global Config Page
-------------------------
-The admin dashboard includes a polished Global Config page for runtime tuning without code changes.
+### Frontend dev flow
 
-- **Grouped settings**: configuration categories are separated into Game, Bet, Budget, and Performance sections.
-- **Searchable fields**: filter settings by label, key, or help text in real time.
-- **Section cards**: modern rounded cards with subtle shadows and hover transitions.
-- **Friendly labels**: backend config keys are displayed with admin-friendly names while keeping the original key visible in a muted label.
-- **Inline editing**: edit values directly, with draft changes highlighted and modified fields clearly marked.
-- **Save / Discard workflow**: each section can be saved independently, and discard removes unsaved changes.
-- **Validation checks**: the UI warns about invalid configurations before saving (e.g. min/max bet, board size vs mines, risk thresholds order, cache TTL).
-- **Responsive layout**: two-column card layout on desktop and tablet, collapses cleanly to a single column on mobile.
-- **Accessibility**: keyboard-friendly controls, visible focus states, ARIA labels, and high contrast text.
-- **Feedback**: loading skeletons appear while fetching, and save actions show in-progress feedback.
+```powershell
+cd frontend
+npm install
+npm run dev
+```
 
-Screenshots
------------
-![Global Config dashboard screenshot](./frontend/public/placeholder-config-screenshot.png)
+The frontend runs on `http://localhost:3000` and is configured to call the backend at `http://localhost:3001`.
 
-Algorithms & internals (brief)
-------------------------------
-This section briefly explains the main algorithms the system uses and where to find their implementation.
-
-- Mine generation (CSPRNG + partial Fisher–Yates):
-  - What it does: picks `mineCount` unique indices from the board using cryptographically-secure random bytes and a partial Fisher–Yates shuffle so selections are uniformly random without modulo bias.
-  - Why: guarantees unbiased, auditable mine placement and prevents predictable patterns.
-  - Where: [backend/src/services/game.service.js](backend/src/services/game.service.js) — `generateMinePositions()` and `_secureRandomInt()`.
-
-- Multiplier calculation (actuarial probability):
-  - What it does: computes the displayed payout multiplier as the inverse of the probability of safely revealing the current number of cells, adjusted by the configured house edge.
-  - Why: produces provably consistent multipliers tied to combinatorial probabilities rather than heuristic scaling.
-  - Where: [backend/src/services/game.service.js](backend/src/services/game.service.js) — `computeMultiplier()`.
-
-- Risk engine (budget-aware adjustments):
-  - What it does: adjusts mine count and effective house edge based on slot budget consumption, player lifecycle, and session streaks to protect budget while preserving player experience.
-  - Where: [backend/src/services/risk-engine.js](backend/src/services/risk-engine.js).
-
-- Budget & Quote engine (new):
-  - What it does: maintains per-slot budgets, creates per-game reservations for maximum allowed payouts, and computes conservative quotes that cap exposure per round; records audit history for reservations, settlements and releases.
-  - Key rules: reservations are made atomically during game creation; cashout settles reservation and moves actual payout into used budget; losses release reservations back to available budget.
-  - Where: repository/service files under [backend/src/repositories/budget.repository.js](backend/src/repositories/budget.repository.js) and [backend/src/services/budget.service.js](backend/src/services/budget.service.js); quote logic in [backend/src/services/quote-engine.service.js](backend/src/services/quote-engine.service.js).
-
-- Player profiling (heuristics):
-  - What it does: classifies players (NEW_PLAYER, NORMAL, HIGH_ROLLER, LOSS_RECOVERY) using historical stats to slightly bias quote behaviour.
-  - Where: [backend/src/services/player-profile.service.js](backend/src/services/player-profile.service.js).
-
-Design decisions & safety
-------------------------
-- MySQL is the single source of truth — all final money movements occur inside DB transactions.
-- Redis is used for active-session caching, idempotency, and short-lived locks; budget state is cached but rebuilt from MySQL if Redis restarts.
-- Reservations live in MySQL (`budget_reservations`) so exposure survives cache failures and server restarts.
-- The quote engine only limits exposure; it does not influence mine positions or alter game fairness.
-
-If you want, I can expand any of these subsections into a 1-page technical note or add Mermaid diagrams showing the flows.
-<div align="center">
-
-# 💣 Stake Mine
-
-**A production-ready, full-stack real-time mines casino game**
-
-[![Next.js](https://img.shields.io/badge/Next.js-14-black?logo=next.js)](https://nextjs.org)
-[![Node.js](https://img.shields.io/badge/Node.js-Express-green?logo=node.js)](https://nodejs.org)
-[![MySQL](https://img.shields.io/badge/MySQL-8-blue?logo=mysql)](https://mysql.com)
-[![Redis](https://img.shields.io/badge/Redis-7-red?logo=redis)](https://redis.io)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5-blue?logo=typescript)](https://typescriptlang.org)
-[![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker)](https://docker.com)
-
-Pick gems. Dodge mines. Cash out before it's too late.
-
-</div>
-
----
-
-## ✨ Features
-
-| Area | What's included |
-|---|---|
-| 🎮 **Gameplay** | Bet, reveal tiles, live multiplier, cashout, session restore |
-| 🔐 **Auth** | JWT login/register, role-based routing (Player / Admin) |
-| 📈 **Progression** | XP levels, titles, missions, badges, daily rewards, leaderboard |
-| 🛡️ **Fairness** | Immutable board, cryptographic mine generation, fairness API |
-| 🧑‍💼 **Admin** | Runtime config, KPI dashboard, slot analytics, player visibility, audit history |
-| 🎨 **UI** | Framer Motion animations, 3D tile flips, particle bursts, sparkline, mobile-first |
-| 🔊 **Audio** | Lightweight generated sound feedback with mute toggle |
-
----
-
-## 🖥️ Tech Stack
+## Environment variables
 
 ### Backend
-- **Node.js** + **Express** — REST API
-- **MySQL 8** — source of truth (wallets, sessions, history)
-- **Redis 7** — active game state, distributed locks, config cache
-- **JWT** — stateless authentication
-- **Winston** — structured logging
+Copy `backend/.env.example` to `backend/.env` and update values for your environment.
+
+Required values:
+- `PORT`
+- `MYSQL_HOST`
+- `MYSQL_PORT`
+- `MYSQL_DATABASE`
+- `MYSQL_USER`
+- `MYSQL_PASSWORD`
+- `REDIS_HOST`
+- `REDIS_PORT`
+- `JWT_SECRET`
+
+Optional:
+- `ALLOWED_ORIGIN`
+- `REDIS_CACHE_TTL`
+- `JWT_EXPIRES_IN`
 
 ### Frontend
-- **Next.js 14** App Router + **TypeScript**
-- **Tailwind CSS** + **Framer Motion**
-- **Zustand** — client state (with localStorage persistence for preferences)
-- **React Hot Toast** — in-game notifications
+Copy `frontend/.env.example` to `frontend/.env` if needed.
 
-### Infra
-- **Docker Compose** — one-command local stack
-- **phpMyAdmin** — DB browser
-- **RedisInsight** — Redis browser
+Required value:
+- `NEXT_PUBLIC_API_URL`
+
+## Important backend behavior
+
+- MySQL is the source of truth for wallets, games, history, budgets, and reservations.
+- Redis is used for:
+  - active game state caching
+  - idempotency keys
+  - distributed locks
+  - budget/slot reservation caches
+- Game actions are designed to use MySQL transactions for all money-critical operations.
+- Expired active games are processed by a server-side cron in `backend/src/server.js`.
+
+## Game algorithms and how it works
+
+### 1. Game start
+- When a player starts a new game, the backend computes a risk profile for that session.
+- It selects a mine count and house edge using the risk engine in `backend/src/services/risk-engine.js`.
+- The game board is initialized by choosing unique mine positions using cryptographically-secure random bytes and a partial Fisher–Yates shuffle.
+- A budget reservation is created for the round so the system can cap exposure before the player cashes out.
+- The backend saves the active game state in Redis and the game row in MySQL.
+
+### 2. Reveal cell
+- The frontend requests a reveal for a chosen cell.
+- The backend loads the game state from Redis, with MySQL fallback if needed.
+- It checks whether the chosen cell is a mine by searching the pre-generated mine set.
+- If the player hits a safe cell, the multiplier is recalculated.
+- If the player hits a mine, the backend settles the loss and releases the reserved budget.
+
+### 3. Multiplier calculation
+- The visible multiplier is derived from the probability of surviving the next reveal.
+- It uses a probability-based formula rather than arbitrary scaling so displayed odds reflect actual combinatorial risk.
+- The multiplier increases each time a safe cell is revealed because the remaining safe probability changes.
+
+### 4. Cashout
+- Cashout is protected by a Redis lock and atomic MySQL updates.
+- The backend recalculates the payout using the current multiplier and the player’s bet amount.
+- The reserved budget is converted to actual used budget, the player wallet is credited, and the game is marked settled.
+- Redis state for the active game is cleared after cashout.
+
+### 5. Risk and budget control
+- The risk engine adjusts difficulty dynamically based on current slot budget pressure and player status.
+- The budget system maintains per-slot daily ledger rows, reservation rows, and a history audit.
+- Reservations are created at game start and released on loss or expiry.
+- On cashout, the reserved amount is replaced by the actual payout before the ledger is updated.
+
+### 6. Safety and consistency
+- Redis is used for speed and coordination, but MySQL always holds the final record for wallet and settlement state.
+- Budget state is cached in Redis for performance, with MySQL used to recover correct state after cache misses.
+- The backend design prioritizes atomic settlement paths and avoids double-processing via locks and idempotency checks.
+
+## Core backend modules
+
+- `backend/src/services/game.service.js` — game start, reveal, cashout, state recovery
+- `backend/src/services/risk-engine.js` — dynamic mine and house edge adjustments
+- `backend/src/repositories/cache.repository.js` — Redis helpers, cache keys, lock management
+- `backend/src/repositories/game.repository.js` — game persistence, settlement, history
+- `backend/src/services/budget.service.js` — admin budget status and reservation accounting
+
+## Core frontend modules
+
+- `frontend/src/app/page.tsx` — player landing / main page
+- `frontend/src/app/login/page.tsx` — auth page
+- `frontend/src/app/admin/page.tsx` — admin dashboard entry
+- `frontend/src/app/history/page.tsx` — player history page
+- `frontend/src/components/` — UI components for game board, controls, navbar, trust panel
+- `frontend/src/lib/api.ts` — API wrappers for backend calls
+- `frontend/src/store/` — Zustand stores for auth and game state
+
+## Running tests
+
+### Backend tests
+
+```powershell
+cd backend
+npm test
+```
+
+### Frontend tests
+
+Currently not configured in this repo.
+
+## Docker Compose services
+
+- `mysql` — MySQL 8 with initial schema mounted from `mysql/init.sql`
+- `phpmyadmin` — phpMyAdmin for database inspection
+- `redis` — Redis 7 for cache and locks
+- `redis-insight` — RedisInsight UI
+- `backend` — Node.js backend API service
+- `frontend` — Next.js frontend service
+
+## Notes
+
+- The app is built for a development/demo workflow. In production, update secrets, use secure CORS, and add HTTPS.
+- The backend uses `backend/src/config/env.js` to validate required environment variables on startup.
+- The frontend Docker build uses `NEXT_PUBLIC_API_URL` and `INTERNAL_API_URL` to route browser and server-side requests.
+
+## Useful commands
+
+```powershell
+# Start all containers
+docker compose up -d
+
+# Restart backend
+docker compose restart backend
+
+# View backend logs
+docker compose logs -f backend
+
+# Rebuild the frontend container
+docker compose up -d --build frontend
+```
 
 ---
 
-## 🏗️ Architecture
+## Contact
 
-```mermaid
-flowchart LR
-    Browser["🌐 Browser"] --> FE["Next.js Frontend :3000"]
-    FE --> API["Express API :3001 /api/v1"]
-    API --> SVC["Service Layer"]
-    SVC --> MySQL["MySQL 8"]
-    SVC --> Redis["Redis 7"]
-```
+If you want, I can also add:
+- an architecture diagram for game flows,
+- a developer quickstart checklist,
+- a separate admin API reference section.
 
 ### Backend Layers
 

@@ -187,8 +187,6 @@ async function getBudgetState(slotId, date) {
 
 /**
  * Atomically increment the spent amount in the budget cache.
- * Uses a Lua script to safely update the JSON value.
- *
  * @param {number} slotId
  * @param {string} date
  * @param {number} amountPaise
@@ -202,6 +200,9 @@ async function incrementBudgetSpent(slotId, date, amountPaise) {
     const state = JSON.parse(raw);
     state.spentPaise = (state.spentPaise || 0) + amountPaise;
     state.gameCount  = (state.gameCount  || 0) + 1;
+    if (typeof state.totalBudgetPaise === 'number') {
+      state.remainingPaise = Math.max(0, state.totalBudgetPaise - state.spentPaise - (state.reservedPaise || 0));
+    }
 
     const ttl = await redisClient.ttl(key);
     if (ttl > 0) {
@@ -209,6 +210,60 @@ async function incrementBudgetSpent(slotId, date, amountPaise) {
     }
   } catch (err) {
     logger.error(`[Cache] incrementBudgetSpent error: ${err.message}`);
+  }
+}
+
+/**
+ * Atomically increment the reserved amount in the budget cache.
+ * @param {number} slotId
+ * @param {string} date
+ * @param {number} amountPaise
+ */
+async function incrementBudgetReserved(slotId, date, amountPaise) {
+  try {
+    const key = KEYS.budget(slotId, date);
+    const raw = await redisClient.get(key);
+    if (!raw) return;
+
+    const state = JSON.parse(raw);
+    state.reservedPaise = (state.reservedPaise || 0) + amountPaise;
+    if (typeof state.totalBudgetPaise === 'number') {
+      state.remainingPaise = Math.max(0, state.totalBudgetPaise - (state.spentPaise || 0) - state.reservedPaise);
+    }
+
+    const ttl = await redisClient.ttl(key);
+    if (ttl > 0) {
+      await redisClient.set(key, JSON.stringify(state), { EX: ttl });
+    }
+  } catch (err) {
+    logger.error(`[Cache] incrementBudgetReserved error: ${err.message}`);
+  }
+}
+
+/**
+ * Atomically decrement the reserved amount in the budget cache.
+ * @param {number} slotId
+ * @param {string} date
+ * @param {number} amountPaise
+ */
+async function decrementBudgetReserved(slotId, date, amountPaise) {
+  try {
+    const key = KEYS.budget(slotId, date);
+    const raw = await redisClient.get(key);
+    if (!raw) return;
+
+    const state = JSON.parse(raw);
+    state.reservedPaise = Math.max(0, (state.reservedPaise || 0) - amountPaise);
+    if (typeof state.totalBudgetPaise === 'number') {
+      state.remainingPaise = Math.max(0, state.totalBudgetPaise - (state.spentPaise || 0) - state.reservedPaise);
+    }
+
+    const ttl = await redisClient.ttl(key);
+    if (ttl > 0) {
+      await redisClient.set(key, JSON.stringify(state), { EX: ttl });
+    }
+  } catch (err) {
+    logger.error(`[Cache] decrementBudgetReserved error: ${err.message}`);
   }
 }
 
@@ -382,6 +437,8 @@ module.exports = {
   setBudgetState,
   getBudgetState,
   incrementBudgetSpent,
+  incrementBudgetReserved,
+  decrementBudgetReserved,
   // Config
   setEffectiveConfig,
   getEffectiveConfig,

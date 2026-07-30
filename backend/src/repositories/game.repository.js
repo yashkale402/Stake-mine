@@ -14,8 +14,16 @@
 
 const { pool } = require('../config/mysql');
 const budgetRepository = require('./budget.repository');
+const cacheRepository = require('../repositories/cache.repository');
 const configRepository = require('./config.repository');
 const { v4: uuidv4 } = require('uuid');
+
+function normalizeLedgerDate(date) {
+  if (!date) return null;
+  if (date instanceof Date) return date.toISOString().split('T')[0];
+  const normalized = String(date);
+  return normalized.includes('T') ? normalized.split('T')[0] : normalized;
+}
 
 /**
  * Insert a new game session record (status = ACTIVE).
@@ -56,7 +64,7 @@ async function createGame(data, connection = null) {
     ]
   );
 
-  // Load inserted row
+  // Load inserted row, including the ledger's slot_id for downstream budget tracking.
   const gameRow = await findGameById(result.insertId, db);
 
   // Attempt conservative reservation for this game inside the same transaction
@@ -94,6 +102,8 @@ async function createGame(data, connection = null) {
             reason: reserveAmount < potentialPayout ? 'GAME_START_PARTIAL_RESERVATION' : 'GAME_START_RESERVATION',
             relatedUuid: game_uuid,
           }, connection || null);
+
+          await cacheRepository.incrementBudgetReserved(gameRow.slot_id, normalizeLedgerDate(ledgerRow.slot_date), reserveAmount);
         }
       } catch (err) {
         console.warn(`[Budget] reservation failed for game ${game_uuid}: ${err.message}`);
@@ -117,8 +127,10 @@ async function createGame(data, connection = null) {
 async function findActiveGameByUuid(gameUuid, connection = null) {
   const db = connection || pool;
   const [rows] = await db.query(
-    `SELECT * FROM game_sessions
-     WHERE game_uuid = ? AND status = 'ACTIVE'
+    `SELECT gs.*, sbl.slot_id, sbl.slot_date AS ledger_date
+     FROM game_sessions gs
+     LEFT JOIN slot_budget_ledger sbl ON gs.slot_ledger_id = sbl.id
+     WHERE gs.game_uuid = ? AND gs.status = 'ACTIVE'
      LIMIT 1`,
     [gameUuid]
   );
@@ -133,7 +145,11 @@ async function findActiveGameByUuid(gameUuid, connection = null) {
  */
 async function findGameByUuid(gameUuid) {
   const [rows] = await pool.query(
-    'SELECT * FROM game_sessions WHERE game_uuid = ? LIMIT 1',
+    `SELECT gs.*, sbl.slot_id
+     FROM game_sessions gs
+     LEFT JOIN slot_budget_ledger sbl ON gs.slot_ledger_id = sbl.id
+     WHERE gs.game_uuid = ?
+     LIMIT 1`,
     [gameUuid]
   );
   return rows[0] || null;
@@ -147,8 +163,10 @@ async function findGameByUuid(gameUuid) {
  */
 async function findActiveGameByUserId(userId) {
   const [rows] = await pool.query(
-    `SELECT * FROM game_sessions
-     WHERE user_id = ? AND status = 'ACTIVE'
+    `SELECT gs.*, sbl.slot_id, sbl.slot_date AS ledger_date
+     FROM game_sessions gs
+     LEFT JOIN slot_budget_ledger sbl ON gs.slot_ledger_id = sbl.id
+     WHERE gs.user_id = ? AND gs.status = 'ACTIVE'
      LIMIT 1`,
     [userId]
   );
@@ -199,9 +217,9 @@ async function settleGameCashout(gameUuid, payoutPaise, finalMultiplier, connect
 
   // Also settle any reservation for this game (if present)
   try {
-    await budgetRepository.settleReservationByGameUuid(gameUuid, payoutPaise, connection || null);
     const reservation = await budgetRepository.findReservationByGameUuid(gameUuid, connection || null);
     if (reservation) {
+      await budgetRepository.settleReservationByGameUuid(gameUuid, payoutPaise, connection || null);
       await budgetRepository.insertBudgetHistory({
         slotLedgerId: reservation.slot_ledger_id,
         changeType: 'SETTLEMENT',
@@ -209,6 +227,11 @@ async function settleGameCashout(gameUuid, payoutPaise, finalMultiplier, connect
         reason: 'GAME_CASHOUT',
         relatedUuid: gameUuid,
       }, connection || null);
+
+      const ledgerRow = await configRepository.getBudgetLedgerById(reservation.slot_ledger_id, connection || null);
+      if (ledgerRow) {
+        await cacheRepository.decrementBudgetReserved(ledgerRow.slot_id, normalizeLedgerDate(ledgerRow.slot_date), reservation.reserved_paise);
+      }
     }
   } catch (err) {
     console.error('[Budget] failed to mark reservation settled:', err.message);
@@ -247,6 +270,11 @@ async function settleGameLost(gameUuid, connection = null) {
         reason: 'GAME_LOSS_RELEASE',
         relatedUuid: gameUuid,
       }, connection || null);
+
+      const ledgerRow = await configRepository.getBudgetLedgerById(reservation.slot_ledger_id, connection || null);
+      if (ledgerRow) {
+        await cacheRepository.decrementBudgetReserved(ledgerRow.slot_id, normalizeLedgerDate(ledgerRow.slot_date), reservation.reserved_paise);
+      }
     }
   } catch (err) {
     console.error('[Budget] failed to release reservation:', err.message);
@@ -262,13 +290,51 @@ async function settleGameLost(gameUuid, connection = null) {
  * @param {string} gameUuid
  * @returns {Promise<number>} Rows affected
  */
-async function settleGameExpired(gameUuid) {
-  const [result] = await pool.query(
+async function settleGameExpired(gameUuid, connection = null) {
+  const db = connection || pool;
+  const [gameRows] = await db.query(
+    `SELECT slot_ledger_id FROM game_sessions
+     WHERE game_uuid = ? AND status = 'ACTIVE'
+     LIMIT 1`,
+    [gameUuid]
+  );
+
+  if (!gameRows[0]) {
+    return 0;
+  }
+
+  const [result] = await db.query(
     `UPDATE game_sessions
      SET status = 'EXPIRED', ended_at = NOW()
      WHERE game_uuid = ? AND status = 'ACTIVE'`,
     [gameUuid]
   );
+
+  if (result.affectedRows === 0) {
+    return 0;
+  }
+
+  try {
+    const reservation = await budgetRepository.findReservationByGameUuid(gameUuid, connection);
+    if (reservation && reservation.status === 'ACTIVE') {
+      await budgetRepository.releaseReservationByGameUuid(gameUuid, connection);
+      await budgetRepository.insertBudgetHistory({
+        slotLedgerId: reservation.slot_ledger_id,
+        changeType: 'RELEASE',
+        amountPaise: reservation.reserved_paise,
+        reason: 'GAME_EXPIRED_RELEASE',
+        relatedUuid: gameUuid,
+      }, connection);
+
+      const ledgerRow = await configRepository.getBudgetLedgerById(reservation.slot_ledger_id, connection || null);
+      if (ledgerRow) {
+        await cacheRepository.decrementBudgetReserved(ledgerRow.slot_id, normalizeLedgerDate(ledgerRow.slot_date), reservation.reserved_paise);
+      }
+    }
+  } catch (err) {
+    console.error('[Budget] failed to release reservation on expiry:', err.message);
+  }
+
   return result.affectedRows;
 }
 
@@ -280,9 +346,10 @@ async function settleGameExpired(gameUuid) {
  */
 async function findExpiredActiveGames() {
   const [rows] = await pool.query(
-    `SELECT game_uuid, user_id, bet_amount_paise, mine_count
-     FROM game_sessions
-     WHERE status = 'ACTIVE' AND expires_at < NOW()`
+    `SELECT gs.game_uuid, gs.user_id, gs.bet_amount_paise, gs.mine_count, gs.slot_ledger_id, sbl.slot_id
+     FROM game_sessions gs
+     LEFT JOIN slot_budget_ledger sbl ON gs.slot_ledger_id = sbl.id
+     WHERE gs.status = 'ACTIVE' AND gs.expires_at < NOW()`
   );
   return rows;
 }
@@ -548,7 +615,10 @@ function round2(value) {
 // Internal helper — find by auto-increment id
 async function findGameById(id, db = pool) {
   const [rows] = await db.query(
-    'SELECT * FROM game_sessions WHERE id = ?',
+    `SELECT gs.*, sbl.slot_id, sbl.slot_date AS ledger_date
+     FROM game_sessions gs
+     LEFT JOIN slot_budget_ledger sbl ON gs.slot_ledger_id = sbl.id
+     WHERE gs.id = ?`,
     [id]
   );
   return rows[0] || null;

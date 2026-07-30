@@ -50,7 +50,7 @@ function startExpiryCron() {
           cells_revealed:    0,
           final_multiplier:  1.0,
           outcome:           'LOSS',
-          slot_id:           null,
+          slot_id:           game.slot_id || null,
         });
         logger.info(`[Cron] Expired game ${game.game_uuid} for user ${game.user_id}`);
       }

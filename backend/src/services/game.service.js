@@ -181,6 +181,7 @@ async function _loadSlotAndBudget() {
       totalBudgetPaise: ledger.total_budget_paise,
       spentPaise:       ledger.spent_paise,
       gameCount:        ledger.game_count,
+      ledgerDate:       ledger.slot_date instanceof Date ? ledger.slot_date.toISOString().split('T')[0] : String(ledger.slot_date),
     };
   }
 
@@ -384,6 +385,7 @@ async function startGame(userId, betAmountPaise, mineCount) {
     house_edge:         effectiveHouseEdge,
     slot_id:            slot?.id || null,
     ledger_id:          budgetState?.ledgerId || null,
+    ledger_date:        budgetState?.ledgerDate || slotDate,
     started_at:         now.toISOString(),
     expires_at:         expiresAt.toISOString(),
   };
@@ -834,10 +836,9 @@ async function cashout(userId, gameUuid) {
     await cacheRepository.deleteGameState(gameUuid);
     await cacheRepository.deleteActiveGamePointer(userId);
 
-    // Update budget cache
-    if (gameState.slot_id && netWinningPaise > 0) {
-      const today = new Date().toISOString().split('T')[0];
-      await cacheRepository.incrementBudgetSpent(gameState.slot_id, today, netWinningPaise);
+    // Update budget cache for the original ledger date, not the current server date.
+    if (gameState.slot_id && gameState.ledger_date && netWinningPaise > 0) {
+      await cacheRepository.incrementBudgetSpent(gameState.slot_id, gameState.ledger_date, netWinningPaise);
     }
 
     const minePositions = Array.isArray(gameState.mine_positions)
@@ -1032,6 +1033,10 @@ function _buildGameStateFromDb(dbRow) {
       ? JSON.parse(dbRow.config_snapshot || '{}')
       : (dbRow.config_snapshot || {});
 
+  const ledgerDate = dbRow.ledger_date
+    ? String(dbRow.ledger_date).split('T')[0]
+    : null;
+
   return {
     game_uuid:          dbRow.game_uuid,
     user_id:            dbRow.user_id,
@@ -1047,8 +1052,9 @@ function _buildGameStateFromDb(dbRow) {
       : (dbRow.revealed_cells || []),
     current_multiplier: parseFloat(dbRow.current_multiplier) || 1.0,
     house_edge:         configSnapshot.houseEdge || 0.05,
-    slot_id:            null,
+    slot_id:            dbRow.slot_id || null,
     ledger_id:          dbRow.slot_ledger_id,
+    ledger_date:        ledgerDate,
     started_at:         dbRow.started_at,
     expires_at:         dbRow.expires_at,
   };
