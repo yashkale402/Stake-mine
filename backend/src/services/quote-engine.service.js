@@ -3,6 +3,7 @@
 const configRepository = require('../repositories/config.repository');
 const budgetRepository = require('../repositories/budget.repository');
 const playerProfileService = require('./player-profile.service');
+const { getRiskLevel, getRiskAdjustments, normalizeThresholds } = require('./risk-engine');
 
 /**
  * Compute a quote for maximum allowed payout for a prospective game start.
@@ -13,27 +14,38 @@ async function quotePayout({ userId, betPaise, mineCount, boardSize, slotLedgerI
   // Load runtime config values
   const rtpCfg = await configRepository.getGlobalConfig('rtp_target');
   const houseEdgeCfg = await configRepository.getGlobalConfig('house_edge');
-  const emergencyThresholdCfg = await configRepository.getGlobalConfig('emergency_threshold_pct');
   const maxMultiplierCfg = await configRepository.getGlobalConfig('maximum_multiplier');
+  const [normalCfg, lowCfg, mediumCfg, highCfg, criticalCfg] = await Promise.all([
+    configRepository.getGlobalConfig('risk_normal_threshold_pct'), configRepository.getGlobalConfig('risk_low_threshold_pct'),
+    configRepository.getGlobalConfig('risk_medium_threshold_pct'), configRepository.getGlobalConfig('risk_high_threshold_pct'),
+    configRepository.getGlobalConfig('risk_critical_threshold_pct'),
+  ]);
 
   const rtpTarget = rtpCfg ? Number(JSON.parse(rtpCfg.config_value)) : 0.95;
   const houseEdge = houseEdgeCfg ? Number(JSON.parse(houseEdgeCfg.config_value)) : 0.05;
-  const emergencyThreshold = emergencyThresholdCfg ? Number(JSON.parse(emergencyThresholdCfg.config_value)) : 0.2;
   const configuredMaxMultiplier = maxMultiplierCfg ? Number(JSON.parse(maxMultiplierCfg.config_value)) : 100;
 
   // Load ledger row to compute remaining budget
-  const ledgerRow = await configRepository.getOrCreateBudgetLedger(slotLedgerId, new Date().toISOString().split('T')[0], 0);
+  const ledgerRow = await configRepository.getBudgetLedgerById(slotLedgerId);
+  if (!ledgerRow) {
+    const err = new Error('Slot budget ledger not found');
+    err.statusCode = 404;
+    throw err;
+  }
   const totalBudget = Number(ledgerRow.total_budget_paise || 0);
   const spent = Number(ledgerRow.spent_paise || 0);
   const reserved = await budgetRepository.getActiveReservedSum(slotLedgerId);
   const remaining = Math.max(0, totalBudget - spent - reserved);
 
-  const remainingPct = totalBudget > 0 ? remaining / totalBudget : 1;
-  let riskLevel = 'NORMAL';
-  if (remainingPct < 0.10) riskLevel = 'CRITICAL';
-  else if (remainingPct < 0.20) riskLevel = 'HIGH';
-  else if (remainingPct < 0.50) riskLevel = 'NORMAL';
-  else riskLevel = 'LOW';
+  const budgetUsagePct = totalBudget > 0 ? (spent / totalBudget) * 100 : 0;
+  const thresholds = normalizeThresholds({
+    normal: normalCfg ? JSON.parse(normalCfg.config_value) : 50,
+    low: lowCfg ? JSON.parse(lowCfg.config_value) : 75,
+    medium: mediumCfg ? JSON.parse(mediumCfg.config_value) : 90,
+    high: highCfg ? JSON.parse(highCfg.config_value) : 100,
+    critical: criticalCfg ? JSON.parse(criticalCfg.config_value) : 100,
+  });
+  const riskLevel = getRiskLevel(budgetUsagePct, thresholds);
 
   // Player profile adjustments
   const profile = await playerProfileService.getPlayerProfile(userId);
@@ -43,9 +55,7 @@ async function quotePayout({ userId, betPaise, mineCount, boardSize, slotLedgerI
   if (profile === 'LOSS_RECOVERY') profileFactor = 1.05;
 
   // Base max multiplier (conservative): scale down by house edge and risk
-  let riskMultiplierCap = configuredMaxMultiplier;
-  if (riskLevel === 'HIGH') riskMultiplierCap = Math.max(2, configuredMaxMultiplier * 0.6);
-  if (riskLevel === 'CRITICAL') riskMultiplierCap = Math.max(1.5, configuredMaxMultiplier * 0.4);
+  const riskMultiplierCap = Math.max(1.25, configuredMaxMultiplier * getRiskAdjustments(riskLevel).multiplierCapFactor);
 
   const maxMultiplier = Math.max(1.0, Math.floor(riskMultiplierCap * profileFactor * 100) / 100);
 
@@ -57,7 +67,7 @@ async function quotePayout({ userId, betPaise, mineCount, boardSize, slotLedgerI
   const allowedByBudget = Math.floor(remaining * 0.9); // hold 10% buffer
   const maxAllowedPayout = Math.min(potentialPayout, allowedByBudget, maxExposure);
 
-  return { maxAllowedPayout, maxMultiplier, riskLevel, remaining, totalBudget };
+  return { maxAllowedPayout, maxMultiplier, riskLevel, remaining, totalBudget, budgetUsagePct };
 }
 
 module.exports = { quotePayout };

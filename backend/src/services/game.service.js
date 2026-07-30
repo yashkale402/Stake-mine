@@ -29,6 +29,7 @@ const { v4: uuidv4 }    = require('uuid');
 
 const configService      = require('./config.service');
 const { computeRiskProfile } = require('./risk-engine');
+const budgetService = require('./budget.service');
 const gameRepository     = require('../repositories/game.repository');
 const userRepository     = require('../repositories/user.repository');
 const configRepository   = require('../repositories/config.repository');
@@ -303,6 +304,15 @@ async function startGame(userId, betAmountPaise, mineCount) {
     playerNetProfitPaise: Number(playerStats?.net_profit_paise || 0),
     playerSessionLosses:  sessionLosses,
     betAmountPaise,
+    thresholds: budgetService.thresholdsFromConfig(config),
+  });
+
+  // Admin-only audit trail. This is deliberately not included in player responses.
+  await budgetService.recordRiskLevelTransition({
+    slotId: slot?.id,
+    riskLevel: riskProfile.level,
+    budgetUsagePct: riskProfile.budgetUsagePct,
+    reason: 'BUDGET_USAGE_THRESHOLD',
   });
 
   const effectiveMines    = riskProfile.mines;
