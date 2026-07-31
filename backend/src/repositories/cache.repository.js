@@ -50,6 +50,54 @@ const TTL = {
   REVEAL_IDEMPOTENCY:300,    // 5 minutes — covers network retry window
 };
 
+// Lua script: GET + mutate + SET in one Redis operation so concurrent reservation
+// updates cannot race and overwrite each other on the same budget cache entry.
+const INCREMENT_BUDGET_RESERVED_SCRIPT = `
+  local raw = redis.call('get', KEYS[1])
+  if not raw then return nil end
+
+  local state = cjson.decode(raw)
+  local delta = tonumber(ARGV[1]) or 0
+  local reserved = tonumber(state.reservedPaise) or 0
+  state.reservedPaise = reserved + delta
+
+  if type(state.totalBudgetPaise) == 'number' then
+    local spent = tonumber(state.spentPaise) or 0
+    state.remainingPaise = math.max(0, state.totalBudgetPaise - spent - state.reservedPaise)
+  end
+
+  local ttl = redis.call('ttl', KEYS[1])
+  if ttl > 0 then
+    redis.call('set', KEYS[1], cjson.encode(state), 'EX', ttl)
+  end
+
+  return 1
+`;
+
+// Lua script: GET + mutate + SET in one Redis operation so concurrent release
+// updates cannot race and restore a stale reservation value over a newer one.
+const DECREMENT_BUDGET_RESERVED_SCRIPT = `
+  local raw = redis.call('get', KEYS[1])
+  if not raw then return nil end
+
+  local state = cjson.decode(raw)
+  local delta = tonumber(ARGV[1]) or 0
+  local reserved = tonumber(state.reservedPaise) or 0
+  state.reservedPaise = math.max(0, reserved - delta)
+
+  if type(state.totalBudgetPaise) == 'number' then
+    local spent = tonumber(state.spentPaise) or 0
+    state.remainingPaise = math.max(0, state.totalBudgetPaise - spent - state.reservedPaise)
+  end
+
+  local ttl = redis.call('ttl', KEYS[1])
+  if ttl > 0 then
+    redis.call('set', KEYS[1], cjson.encode(state), 'EX', ttl)
+  end
+
+  return 1
+`;
+
 // ── Game State (Hash) ─────────────────────────────────────────────────────────
 
 /**
@@ -222,19 +270,10 @@ async function incrementBudgetSpent(slotId, date, amountPaise) {
 async function incrementBudgetReserved(slotId, date, amountPaise) {
   try {
     const key = KEYS.budget(slotId, date);
-    const raw = await redisClient.get(key);
-    if (!raw) return;
-
-    const state = JSON.parse(raw);
-    state.reservedPaise = (state.reservedPaise || 0) + amountPaise;
-    if (typeof state.totalBudgetPaise === 'number') {
-      state.remainingPaise = Math.max(0, state.totalBudgetPaise - (state.spentPaise || 0) - state.reservedPaise);
-    }
-
-    const ttl = await redisClient.ttl(key);
-    if (ttl > 0) {
-      await redisClient.set(key, JSON.stringify(state), { EX: ttl });
-    }
+    await redisClient.eval(INCREMENT_BUDGET_RESERVED_SCRIPT, {
+      keys: [key],
+      arguments: [String(amountPaise)],
+    });
   } catch (err) {
     logger.error(`[Cache] incrementBudgetReserved error: ${err.message}`);
   }
@@ -249,19 +288,10 @@ async function incrementBudgetReserved(slotId, date, amountPaise) {
 async function decrementBudgetReserved(slotId, date, amountPaise) {
   try {
     const key = KEYS.budget(slotId, date);
-    const raw = await redisClient.get(key);
-    if (!raw) return;
-
-    const state = JSON.parse(raw);
-    state.reservedPaise = Math.max(0, (state.reservedPaise || 0) - amountPaise);
-    if (typeof state.totalBudgetPaise === 'number') {
-      state.remainingPaise = Math.max(0, state.totalBudgetPaise - (state.spentPaise || 0) - state.reservedPaise);
-    }
-
-    const ttl = await redisClient.ttl(key);
-    if (ttl > 0) {
-      await redisClient.set(key, JSON.stringify(state), { EX: ttl });
-    }
+    await redisClient.eval(DECREMENT_BUDGET_RESERVED_SCRIPT, {
+      keys: [key],
+      arguments: [String(amountPaise)],
+    });
   } catch (err) {
     logger.error(`[Cache] decrementBudgetReserved error: ${err.message}`);
   }
