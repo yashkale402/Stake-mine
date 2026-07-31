@@ -25,6 +25,7 @@ export default function AdminPage() {
   const [msg, setMsg] = useState<{text:string; ok:boolean}|null>(null);
   const [editingSection, setEditingSection] = useState<string | null>(null);
   const [draftConfig, setDraftConfig] = useState<Record<string, any>>({});
+  const [rawDraftValues, setRawDraftValues] = useState<Record<string, string>>({});
   const [sectionOpen, setSectionOpen] = useState<Record<string, boolean>>({ game: true, bet: true, budget: true, performance: true });
   const [sectionErrors, setSectionErrors] = useState<Record<string, string>>({});
   const [savingSection, setSavingSection] = useState<string | null>(null);
@@ -267,6 +268,19 @@ export default function AdminPage() {
     setSectionErrors((prev) => ({ ...prev, [field.key]: '' }));
   };
 
+  const handleDraftFieldChange = (field: any, raw: string) => {
+    setRawDraftValues((prev) => ({ ...prev, [field.key]: raw }));
+    updateDraftField(field, raw);
+  };
+
+  const handleDraftFieldBlur = (field: any) => {
+    setRawDraftValues((prev) => {
+      const next = { ...prev };
+      delete next[field.key];
+      return next;
+    });
+  };
+
   const validateSection = (section: any) => {
     const errors: Record<string, string> = {};
     const values = Object.fromEntries(section.fields.map((field: any) => [field.key, getFieldValue(field.key)]));
@@ -320,6 +334,11 @@ export default function AdminPage() {
       return String(current) !== String(draft);
     });
     if (changedFields.length === 0) {
+      setRawDraftValues((prev) => {
+        const next = { ...prev };
+        section.fields.forEach((field: any) => delete next[field.key]);
+        return next;
+      });
       setEditingSection(null);
       return;
     }
@@ -335,6 +354,11 @@ export default function AdminPage() {
         changedFields.forEach((field: any) => delete next[field.key]);
         return next;
       });
+      setRawDraftValues((prev) => {
+        const next = { ...prev };
+        section.fields.forEach((field: any) => delete next[field.key]);
+        return next;
+      });
       setSectionErrors({});
       load();
     } catch (e: any) {
@@ -348,6 +372,11 @@ export default function AdminPage() {
     const next = { ...draftConfig };
     section.fields.forEach((field: any) => delete next[field.key]);
     setDraftConfig(next);
+    setRawDraftValues((prev) => {
+      const next = { ...prev };
+      section.fields.forEach((field: any) => delete next[field.key]);
+      return next;
+    });
     setSectionErrors({});
     setEditingSection(null);
   };
@@ -701,7 +730,7 @@ export default function AdminPage() {
                       <div className="mt-6 space-y-4">
                         {section.fields.map((field: any) => {
                           const fieldValue = getFieldValue(field.key);
-                          const inputValue = getInputValue(field);
+                          const inputValue = rawDraftValues[field.key] ?? getInputValue(field);
                           const fieldDirty = draftConfig.hasOwnProperty(field.key) && String(configMap[field.key]) !== String(draftConfig[field.key]);
                           return (
                             <div key={field.key} className={`rounded-3xl border px-5 py-5 transition ${fieldDirty ? 'border-stake-accent/40 bg-stake-accent/5 shadow-[0_20px_45px_-32px_rgba(251,191,36,0.7)]' : 'border-white/10 bg-white/[0.02] hover:border-white/20'}`}>
@@ -729,7 +758,8 @@ export default function AdminPage() {
                                 <div className="space-y-2">
                                   <input
                                     value={inputValue}
-                                    onChange={(e) => updateDraftField(field, e.target.value)}
+                                    onChange={(e) => handleDraftFieldChange(field, e.target.value)}
+                                    onBlur={() => handleDraftFieldBlur(field)}
                                     placeholder={field.placeholder || `Update ${field.label}`}
                                     aria-label={`Edit ${field.label}`}
                                     className="input-field w-full rounded-3xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white placeholder:text-stake-text focus:border-stake-accent focus:outline-none focus:ring-2 focus:ring-stake-accent/20"
