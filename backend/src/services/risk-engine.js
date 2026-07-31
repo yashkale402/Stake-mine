@@ -12,7 +12,13 @@ const RISK_LEVELS = Object.freeze({
   CRITICAL: 'CRITICAL',
 });
 
-const DEFAULT_THRESHOLDS = Object.freeze({ normal: 50, low: 75, medium: 90, high: 100, critical: 100 });
+const DEFAULT_THRESHOLDS = Object.freeze({
+  normal: 50,
+  low: 75,
+  medium: 90,
+  high: 100,
+  critical: 100,
+});
 
 function normalizeThresholds(input = {}) {
   const value = (key, fallback) => {
@@ -68,11 +74,14 @@ function computeRiskProfile({
   const adjustment = getRiskAdjustments(level);
   const maxMines = Math.max(1, boardSize - 1); // always leave at least one possible safe cell
 
+  const effectiveMines = Math.min(maxMines, Math.max(1, Number(requestedMines) + adjustment.mineDelta));
+  const effectiveHouseEdge = Math.min(0.20, Math.max(0.01, Number(baseHouseEdge) + adjustment.edgeDelta));
+
   return {
     level,
     mode: level,
-    mines: Math.min(maxMines, Math.max(1, Number(requestedMines) + adjustment.mineDelta)),
-    houseEdge: Math.min(0.20, Math.max(0.01, Number(baseHouseEdge) + adjustment.edgeDelta)),
+    mines: effectiveMines,
+    houseEdge: effectiveHouseEdge,
     multiplierCapFactor: adjustment.multiplierCapFactor,
     dailyBudget,
     usedBudget,

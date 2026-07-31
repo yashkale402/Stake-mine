@@ -200,7 +200,9 @@ Required value:
 - Redis state for the active game is cleared after cashout.
 
 ### 5. Risk and budget control
-- The risk engine adjusts difficulty dynamically based on current slot budget pressure and player status.
+- The risk engine adjusts difficulty dynamically based on current slot budget pressure.
+- The base risk level is derived from daily slot budget usage: spent plus reserved budget versus the slot's total daily budget, using the configured thresholds from the global config (`risk_normal_threshold_pct`, `risk_low_threshold_pct`, `risk_medium_threshold_pct`, `risk_high_threshold_pct`, `risk_critical_threshold_pct`).
+- The engine does not target risk based on individual player history or session loss streaks.
 - The budget system maintains per-slot daily ledger rows, reservation rows, and a history audit.
 - Reservations are created at game start and released on loss or expiry.
 - On cashout, the reserved amount is replaced by the actual payout before the ledger is updated.

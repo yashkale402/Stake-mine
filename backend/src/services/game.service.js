@@ -297,22 +297,15 @@ async function startGame(userId, betAmountPaise, mineCount) {
   const { slot, ledger: budgetState } = await _loadSlotAndBudget();
 
   // ── 7. Compute risk profile + generate mine positions (CSPRNG) ───────────
-  // Risk engine adjusts mines/houseEdge based on budget pressure & player lifecycle
-  const playerStats = await gameRepository.getPlayerSummaryStats(userId);
-  const sessionLosses = await gameRepository.getConsecutiveLosses(userId);
-
+  // Risk engine adjusts mines/houseEdge based on slot budget pressure.
   const riskProfile = computeRiskProfile({
-    requestedMines:       mineCount,
+    requestedMines:   mineCount,
     boardSize,
-    baseHouseEdge:        houseEdge,
-    totalBudgetPaise:     budgetState?.totalBudgetPaise || 1,
-    spentPaise:           budgetState?.spentPaise || 0,
-    reservedPaise:        budgetState?.reservedPaise || 0,
-    playerTotalGames:     Number(playerStats?.total_games || 0),
-    playerNetProfitPaise: Number(playerStats?.net_profit_paise || 0),
-    playerSessionLosses:  sessionLosses,
-    betAmountPaise,
-    thresholds: budgetService.thresholdsFromConfig(config),
+    baseHouseEdge:    houseEdge,
+    totalBudgetPaise: budgetState?.totalBudgetPaise || 1,
+    spentPaise:       budgetState?.spentPaise || 0,
+    reservedPaise:    budgetState?.reservedPaise || 0,
+    thresholds:       budgetService.thresholdsFromConfig(config),
   });
 
   // Admin-only audit trail. This is deliberately not included in player responses.

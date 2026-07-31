@@ -46,3 +46,4 @@ test('reserved budget contributes to effective risk pressure', () => {
   assert.equal(base.budgetUsagePct, 40);
   assert.equal(base.effectiveUsagePct, 55);
 });
+
