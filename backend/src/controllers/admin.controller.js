@@ -10,6 +10,7 @@ const configRepository = require('../repositories/config.repository');
 const userRepository = require('../repositories/user.repository');
 const gameRepository = require('../repositories/game.repository');
 const budgetService = require('../services/budget.service');
+const cacheRepository = require('../repositories/cache.repository');
 const { success } = require('../utils/response.helper');
 
 async function getConfigs(req, res, next) {
@@ -61,6 +62,13 @@ async function updateSlot(req, res, next) {
     if (typeof body.is_active !== 'undefined') fields.is_active = !!body.is_active;
 
     await configRepository.updateSlot(id, fields, req.user.username);
+
+    if (typeof body.budget_paise !== 'undefined' && body.budget_paise !== null) {
+      const todayDateString = new Date().toISOString().split('T')[0];
+      await configRepository.updateTodayLedgerBudget(Number(id), todayDateString, Number(body.budget_paise));
+      await cacheRepository.deleteBudgetState(Number(id), todayDateString);
+    }
+
     await configRepository.insertAuditLog({
       entity_type: 'SLOT', entity_id: id, action: 'SLOT_UPDATE',
       actor: req.user.username, payload: req.body,

@@ -140,6 +140,24 @@ async function getOrCreateBudgetLedger(slotId, slotDate, budgetPaise) {
 }
 
 /**
+ * Update the total budget for an existing today's ledger row.
+ * Does nothing if no ledger row exists for that slot/date yet.
+ *
+ * @param {number} slotId
+ * @param {string} slotDate   'YYYY-MM-DD'
+ * @param {number} newBudgetPaise
+ * @returns {Promise<void>}
+ */
+async function updateTodayLedgerBudget(slotId, slotDate, newBudgetPaise) {
+  await pool.query(
+    `UPDATE slot_budget_ledger
+     SET total_budget_paise = ?
+     WHERE slot_id = ? AND slot_date = ?`,
+    [newBudgetPaise, slotId, slotDate]
+  );
+}
+
+/**
  * Increment spent_paise and game_count after a game is settled (win/cashout).
  *
  * @param {number} ledgerId
@@ -307,6 +325,7 @@ module.exports = {
   getAllSlots,
   getSlotByHour,
   getOrCreateBudgetLedger,
+  updateTodayLedgerBudget,
   getBudgetLedgerById,
   incrementBudgetSpent,
   insertAuditLog,

@@ -234,6 +234,19 @@ async function getBudgetState(slotId, date) {
 }
 
 /**
+ * Delete the cached slot budget state for a slot/date.
+ * @param {number} slotId
+ * @param {string} date
+ */
+async function deleteBudgetState(slotId, date) {
+  try {
+    await redisClient.del(KEYS.budget(slotId, date));
+  } catch (err) {
+    logger.error(`[Cache] deleteBudgetState error: ${err.message}`);
+  }
+}
+
+/**
  * Atomically increment the spent amount in the budget cache.
  * @param {number} slotId
  * @param {string} date
@@ -466,6 +479,7 @@ module.exports = {
   // Budget
   setBudgetState,
   getBudgetState,
+  deleteBudgetState,
   incrementBudgetSpent,
   incrementBudgetReserved,
   decrementBudgetReserved,
